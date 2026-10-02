@@ -71,16 +71,16 @@ export const AdminDashboard: React.FC = () => {
     );
   }
 
-  const total = stats?.total || 32;
-  const critical = stats?.priority.critical ?? 3;
-  const high = stats?.priority.high ?? 7;
-  const medium = stats?.priority.medium ?? 14;
-  const low = stats?.priority.low ?? 8;
+  const total = stats?.total ?? 0;
+  const critical = stats?.priority?.critical ?? 0;
+  const high = stats?.priority?.high ?? 0;
+  const medium = stats?.priority?.medium ?? 0;
+  const low = stats?.priority?.low ?? 0;
 
-  const reported = stats?.status.reported ?? 8;
-  const assigned = stats?.status.assigned ?? 7;
-  const inProgress = stats?.status.in_progress ?? 9;
-  const resolved = stats?.status.resolved ?? 8;
+  const reported = stats?.status?.reported ?? 0;
+  const assigned = stats?.status?.assigned ?? 0;
+  const inProgress = stats?.status?.in_progress ?? 0;
+  const resolved = stats?.status?.resolved ?? 0;
 
   const priorityTotal = Math.max(1, critical + high + medium + low);
   const statusTotal = Math.max(1, reported + assigned + inProgress + resolved);
@@ -92,30 +92,7 @@ export const AdminDashboard: React.FC = () => {
   const inpLen = (inProgress / statusTotal) * C;
   const resLen = (resolved / statusTotal) * C;
 
-  const recurringClusters = stats?.recurring_clusters || [
-    {
-      cluster_id: '#CL-ENG-204',
-      complaint_id: 'COM-2026-0001',
-      location_label: 'Lab 204 — Engineering Block',
-      building: 'Engineering Block',
-      room: 'Lab 204',
-      category: 'Electrical',
-      count: 4,
-      summary: 'Repeated MCB trip and wire heating reported within 72 hours.',
-      severity: 'Critical' as const,
-    },
-    {
-      cluster_id: '#CL-SCI-101',
-      complaint_id: 'COM-2026-0002',
-      location_label: 'Room 101 — Science Wing',
-      building: 'Science Wing',
-      room: 'Room 101',
-      category: 'Plumbing',
-      count: 3,
-      summary: 'Under-sink supply pipe leakage recurring after temporary seal.',
-      severity: 'High' as const,
-    },
-  ];
+  const recurringClusters = stats?.recurring_clusters || [];
 
   return (
     <AdminLayout
@@ -453,43 +430,49 @@ export const AdminDashboard: React.FC = () => {
               </p>
 
               <div className="flex flex-col gap-3">
-                {recurringClusters.map((cluster) => (
-                  <Link
-                    key={cluster.cluster_id}
-                    to={`/admin/complaints/${cluster.complaint_id}`}
-                    className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] hover:bg-white transition-all group flex flex-col gap-1.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            cluster.severity === 'Critical' ? 'bg-[#DC2626]' : 'bg-[#EA580C]'
-                          }`}
-                        />
-                        <span className="text-xs font-bold text-[#0F172A]">
-                          ⚠ {cluster.location_label}
+                {recurringClusters.length === 0 ? (
+                  <div className="p-4 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-center text-xs text-[#64748B]">
+                    No recurring spatial clusters flagged at this time.
+                  </div>
+                ) : (
+                  recurringClusters.map((cluster) => (
+                    <Link
+                      key={cluster.cluster_id}
+                      to={`/admin/complaints/${cluster.complaint_id}`}
+                      className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] hover:bg-white transition-all group flex flex-col gap-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              cluster.severity === 'Critical' ? 'bg-[#DC2626]' : 'bg-[#EA580C]'
+                            }`}
+                          />
+                          <span className="text-xs font-bold text-[#0F172A]">
+                            ⚠ {cluster.location_label}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="font-medium text-[#2563EB]">{cluster.category}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono-tech font-semibold text-[#DC2626]">
+                          {cluster.count} complaints
                         </span>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-medium text-[#2563EB]">{cluster.category}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono-tech font-semibold text-[#DC2626]">
-                        {cluster.count} complaints
-                      </span>
-                    </div>
+                      <p className="text-xs text-[#64748B] leading-relaxed">{cluster.summary}</p>
 
-                    <p className="text-xs text-[#64748B] leading-relaxed">{cluster.summary}</p>
-
-                    <div className="pt-1 flex items-center justify-between text-[11px]">
-                      <span className="font-mono-tech text-[#64748B]">{cluster.cluster_id}</span>
-                      <span className="font-semibold text-[#2563EB] inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                        Inspect Complaint <ArrowRight className="w-3 h-3" />
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+                      <div className="pt-1 flex items-center justify-between text-[11px]">
+                        <span className="font-mono-tech text-[#64748B]">{cluster.cluster_id}</span>
+                        <span className="font-semibold text-[#2563EB] inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                          Inspect Complaint <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </div>
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
           </div>

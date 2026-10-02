@@ -15,11 +15,11 @@ import {
 } from 'lucide-react';
 import { PublicNavbar, PublicFooter } from '../components/Navbar';
 import { PhotoUploader, type UploadedPhotoState } from '../components/PhotoUploader';
+import { LocationSelector } from '../components/LocationSelector';
 import { LocationCard } from '../components/LocationCard';
 import { PriorityBadge } from '../components/PriorityBadge';
 import { StatusBadge } from '../components/StatusBadge';
-import { createComplaint, detectPhotoLocation, resendComplaintEmail } from '../services/api';
-import { CAMPUS_BUILDINGS } from '../utils/formatters';
+import { createComplaint, detectPhotoLocation, resendComplaintEmail, type CampusLocation } from '../services/api';
 import type { CreateComplaintResponse } from '../types';
 
 const CATEGORIES = [
@@ -42,9 +42,9 @@ export const ReportComplaint: React.FC = () => {
   const [description, setDescription] = useState('');
   const [photo, setPhoto] = useState<UploadedPhotoState | null>(null);
 
-  const [building, setBuilding] = useState('Engineering Block');
-  const [floor, setFloor] = useState('Floor 2');
-  const [room, setRoom] = useState('Lab 204');
+  // Dynamic Location State
+  const [locationId, setLocationId] = useState('LOC001');
+  const [selectedLocation, setSelectedLocation] = useState<CampusLocation | undefined>(undefined);
 
   // Location Detection State from Backend
   const [locationPreview, setLocationPreview] = useState<{
@@ -68,27 +68,8 @@ export const ReportComplaint: React.FC = () => {
   const [emailResentSuccess, setEmailResentSuccess] = useState(false);
 
   // Quick Status Lookup Bar State
-  const [quickTrackId, setQuickTrackId] = useState('COM-2026-0001');
-  const [quickTrackEmail, setQuickTrackEmail] = useState('student@example.com');
-
-  // Update available floors and rooms when building/floor changes
-  const availableFloors = CAMPUS_BUILDINGS[building]?.floors || ['Floor 1'];
-  const availableRooms = CAMPUS_BUILDINGS[building]?.roomsByFloor[floor] || ['Room 101'];
-
-  const handleBuildingChange = (newBuilding: string) => {
-    setBuilding(newBuilding);
-    const firstFloor = CAMPUS_BUILDINGS[newBuilding]?.floors[0] || 'Floor 1';
-    setFloor(firstFloor);
-    const firstRoom =
-      CAMPUS_BUILDINGS[newBuilding]?.roomsByFloor[firstFloor]?.[0] || 'Room 101';
-    setRoom(firstRoom);
-  };
-
-  const handleFloorChange = (newFloor: string) => {
-    setFloor(newFloor);
-    const firstRoom = CAMPUS_BUILDINGS[building]?.roomsByFloor[newFloor]?.[0] || 'Room 101';
-    setRoom(firstRoom);
-  };
+  const [quickTrackId, setQuickTrackId] = useState('HIST001');
+  const [quickTrackEmail, setQuickTrackEmail] = useState('student.a@campus.edu');
 
   // Trigger backend location detection when photo or location changes
   useEffect(() => {
@@ -99,9 +80,7 @@ export const ReportComplaint: React.FC = () => {
 
     let cancelled = false;
     detectPhotoLocation({
-      building,
-      floor,
-      room,
+      location_id: locationId,
       gps_mode: photo.gpsMode,
     })
       .then((res) => {
@@ -113,11 +92,11 @@ export const ReportComplaint: React.FC = () => {
         if (!cancelled) {
           setLocationPreview({
             has_gps: photo.gpsMode !== 'none',
-            latitude: 19.12345,
-            longitude: 72.87654,
-            detected_building: building,
-            detected_floor: floor,
-            detected_room: photo.gpsMode === 'mismatch' ? 'Lab 203' : room,
+            latitude: selectedLocation?.latitude || 19.045266,
+            longitude: selectedLocation?.longitude || 72.841845,
+            detected_building: selectedLocation?.building || 'Xavier Institute of Engineering',
+            detected_floor: selectedLocation ? `Floor ${selectedLocation.floor}` : 'Floor 1',
+            detected_room: photo.gpsMode === 'mismatch' ? 'CC Lab' : (selectedLocation?.room || 'DB Lab'),
             verified: photo.gpsMode === 'verified',
           });
         }
@@ -126,24 +105,22 @@ export const ReportComplaint: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [photo, building, floor, room]);
+  }, [photo, locationId, selectedLocation]);
 
-  // Pre-fill Acceptance Test Demo Data
+  // Pre-fill Acceptance Test Demo Data (Final Demo Scenario)
   const handleFillDemoScenario = () => {
-    setUserId('TEIT30');
-    setName('Soham Palkar');
-    setEmail('student@example.com');
+    setUserId('30');
+    setName('Soham');
+    setEmail('soham@example.com');
     setCategory('Electrical');
-    setBuilding('Engineering Block');
-    setFloor('Floor 2');
-    setRoom('Lab 204');
+    setLocationId('LOC001');
     setDescription(
-      'Sparking from exposed electrical wire near main distribution switchboard inside Lab 204. Small scorch mark visible when adjacent machines power up.'
+      'Sparking from exposed wire near DB Lab switchboard. Small scorch mark visible when adjacent machines power up.'
     );
     setPhoto({
       file: null,
       previewUrl: '/src/assets/images/incident_electrical_spark_1790921884186.jpg',
-      filename: 'wire_switchboard_hazard.jpg',
+      filename: 'db_lab_electrical_spark.jpg',
       sizeLabel: '2.4 MB',
       gpsMode: 'verified',
     });
@@ -166,12 +143,9 @@ export const ReportComplaint: React.FC = () => {
     if (!description.trim()) {
       newErrors.description = 'Complaint description cannot be empty.';
     }
-    if (!photo) {
-      newErrors.photo = 'Please upload a photo or take a photo with your camera.';
+    if (!locationId) {
+      newErrors.locationId = 'Please select a campus location.';
     }
-    if (!building) newErrors.building = 'Building is required.';
-    if (!floor) newErrors.floor = 'Floor is required.';
-    if (!room) newErrors.room = 'Room / Lab is required.';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -192,9 +166,7 @@ export const ReportComplaint: React.FC = () => {
         name: name.trim(),
         email: email.trim(),
         category,
-        building,
-        floor,
-        room,
+        location_id: locationId,
         description: description.trim(),
         photo: photo?.file || null,
         photo_data_url: photo?.previewUrl,
@@ -208,9 +180,10 @@ export const ReportComplaint: React.FC = () => {
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          ? (err as { response?: { data?: { error?: string; message?: string } } }).response?.data?.error ||
+            (err as { response?: { data?: { message?: string } } }).response?.data?.message
           : null;
-      setSubmitError(msg || 'Unable to submit complaint. Please try again.');
+      setSubmitError(msg || 'Unable to submit complaint. Please check your backend connection.');
     } finally {
       setIsSubmitting(false);
     }
@@ -223,7 +196,7 @@ export const ReportComplaint: React.FC = () => {
     try {
       const res = await resendComplaintEmail(
         submittedResult.complaint_id,
-        submittedResult.user_email_recipient || email.trim() || 'student@example.com'
+        submittedResult.user_email_recipient || email.trim() || 'soham@example.com'
       );
       setSubmittedResult({
         ...submittedResult,
@@ -272,18 +245,18 @@ export const ReportComplaint: React.FC = () => {
       <PublicNavbar />
 
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-8 py-8">
-        {/* Compact Hero Section (Section 9) */}
+        {/* Hero Section */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-[#E2E8F0]">
           <div>
             <p className="font-mono-tech text-xs font-semibold text-[#2563EB] mb-1">
-              Campus Facilities SLA 24/7 · PS-07 Platform
+              Xavier Institute of Engineering · SmartFix Platform
             </p>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0F172A]">
               Report a Maintenance Issue
             </h1>
             <p className="text-sm text-[#64748B] mt-1 max-w-2xl">
-              Help us resolve campus maintenance problems faster. Submit a complaint with the
-              location and a photo. Critical and recurring issues are automatically identified.
+              Submit campus maintenance issues directly to facilities. Automated safety triage,
+              GPS verification, and recurrence detection ensure rapid SLA resolution.
             </p>
           </div>
 
@@ -294,20 +267,20 @@ export const ReportComplaint: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded border border-[#BFDBFE] bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#1D4ED8] text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Fill Demo Scenario (Lab 204)</span>
+              <span>Fill Demo Scenario (DB Lab)</span>
             </button>
           )}
         </div>
 
-        {/* Instant Ticket Lookup Strip */}
+        {/* Quick Ticket Lookup Strip */}
         {!submittedResult && (
           <div className="mt-6 bg-white border border-[#E2E8F0] rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-[#0F172A]">
-                Already lodged a complaint? Check status instantly
+                Already reported an issue? Track status in real time
               </span>
               <span className="text-xs text-[#64748B]">
-                Enter your Complaint ID and registered campus email to inspect live progress.
+                Enter your Problem ID and registered email to check progress.
               </span>
             </div>
 
@@ -327,8 +300,8 @@ export const ReportComplaint: React.FC = () => {
                 type="email"
                 value={quickTrackEmail}
                 onChange={(e) => setQuickTrackEmail(e.target.value)}
-                placeholder="student@example.com"
-                className="h-9 px-3 rounded border border-[#CBD5E1] bg-[#F8FAFC] text-xs text-[#0F172A] focus:outline-none focus:bg-white focus:border-[#2563EB] sm:w-44"
+                placeholder="soham@example.com"
+                className="h-9 px-3 rounded border border-[#CBD5E1] bg-[#F8FAFC] text-xs text-[#0F172A] focus:outline-none focus:bg-white focus:border-[#2563EB] sm:w-48"
                 required
               />
               <button
@@ -342,7 +315,7 @@ export const ReportComplaint: React.FC = () => {
           </div>
         )}
 
-        {/* SUCCESS VIEW (Section 17) */}
+        {/* SUCCESS VIEW */}
         {submittedResult ? (
           <div className="mt-8 bg-white border border-[#E2E8F0] rounded-lg p-6 sm:p-8 flex flex-col gap-6">
             <div className="flex items-start gap-4 pb-5 border-b border-[#E2E8F0]">
@@ -351,16 +324,15 @@ export const ReportComplaint: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <h2 className="text-lg font-bold text-[#0F172A]">
-                  ✓ Complaint Submitted Successfully
+                  ✓ Complaint Registered Successfully
                 </h2>
                 <p className="text-sm text-[#64748B] mt-0.5">
-                  Your complaint has been registered and your Complaint ID has been dispatched to
-                  your email address.
+                  Your maintenance complaint has been logged and your Problem ID is ready.
                 </p>
               </div>
             </div>
 
-            {/* Email Notification Dispatch Banner */}
+            {/* Email Notification Status Banner */}
             <div className="p-4 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex flex-col gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-start sm:items-center gap-3">
@@ -369,10 +341,12 @@ export const ReportComplaint: React.FC = () => {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-[#1E3A8A]">
-                      ✓ Complaint ID Sent to Your Email
+                      {submittedResult.user_email_sent
+                        ? '✓ Confirmation Email Dispatched'
+                        : '⚠ Confirmation Email Simulated / Pending'}
                     </span>
                     <span className="text-xs text-[#1E40AF] mt-0.5">
-                      Confirmation email containing Complaint ID{' '}
+                      Confirmation notice for Problem ID{' '}
                       <strong className="font-mono-tech">{submittedResult.complaint_id}</strong>{' '}
                       sent to{' '}
                       <strong className="font-mono-tech">
@@ -406,39 +380,41 @@ export const ReportComplaint: React.FC = () => {
                 </div>
               </div>
 
-              {/* Dispatched Email Preview Card */}
+              {/* Email Content Preview */}
               {showEmailPreview && (
                 <div className="mt-1 p-4 rounded bg-white border border-[#DBEAFE] text-xs text-[#334155] flex flex-col gap-2">
                   <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#E2E8F0] font-mono-tech text-[11px] text-[#64748B]">
-                    <span>From: facilities-noreply@campus.edu</span>
+                    <span>From: facilities@smartfix.campus.edu</span>
                     <span>To: {submittedResult.user_email_recipient || email}</span>
-                    <span>Dispatched: {submittedResult.email_sent_at || 'Just now'}</span>
+                    <span>Time: {submittedResult.email_sent_at || 'Just now'}</span>
                   </div>
                   <p className="font-semibold text-[#0F172A]">
-                    Subject:{' '}
-                    {submittedResult.email_subject ||
-                      `[SmartFix Campus Ops] Complaint Registered — ID: ${submittedResult.complaint_id}`}
+                    Subject: {submittedResult.email_subject || `SmartFix Complaint Registered — ${submittedResult.complaint_id}`}
                   </p>
-                  <p className="leading-relaxed text-[#475569]">
-                    Hello <strong className="text-[#0F172A]">{name || 'Student'}</strong>, your
-                    maintenance complaint for{' '}
-                    <strong className="text-[#0F172A]">{submittedResult.location.name}</strong> has
-                    been registered. Use your Complaint ID{' '}
-                    <strong className="font-mono-tech text-[#2563EB]">
-                      {submittedResult.complaint_id}
-                    </strong>{' '}
-                    and this email address (<strong className="font-mono-tech">{email}</strong>) on
-                    the Track Complaint portal to monitor technician assignment and resolution
-                    progress.
-                  </p>
+                  <div className="p-3 bg-[#F8FAFC] rounded border border-[#E2E8F0] font-mono-tech text-xs leading-relaxed text-[#334155]">
+                    Hello {name || 'Soham'},<br /><br />
+                    Your maintenance complaint has been successfully registered.<br /><br />
+                    <strong>Problem ID:</strong> {submittedResult.complaint_id}<br />
+                    <strong>Category:</strong> {category}<br />
+                    <strong>Location:</strong> {submittedResult.location.name}<br />
+                    <strong>Priority:</strong> {submittedResult.priority}<br />
+                    <strong>Status:</strong> {submittedResult.status}<br /><br />
+                    <strong>Description:</strong><br />
+                    {description}<br /><br />
+                    You can track your complaint using:<br />
+                    Problem ID: <strong>{submittedResult.complaint_id}</strong><br />
+                    Email: <strong>{submittedResult.user_email_recipient || email}</strong><br /><br />
+                    Thank you,<br />
+                    SmartFix Maintenance System
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Complaint ID Highlight Box */}
+            {/* Problem ID Highlight Box */}
             <div className="p-5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-col gap-1">
-                <span className="font-mono-tech text-xs text-[#64748B]">Complaint ID</span>
+                <span className="font-mono-tech text-xs text-[#64748B]">Problem ID</span>
                 <div className="flex items-center gap-3">
                   <span className="font-mono-tech text-2xl font-bold text-[#2563EB]">
                     {submittedResult.complaint_id}
@@ -466,7 +442,7 @@ export const ReportComplaint: React.FC = () => {
               <div className="flex items-center gap-3">
                 <div className="flex flex-col sm:items-end gap-1">
                   <span className="font-mono-tech text-[11px] text-[#64748B]">
-                    Automated Priority
+                    Calculated Priority
                   </span>
                   <PriorityBadge priority={submittedResult.priority} />
                 </div>
@@ -478,37 +454,36 @@ export const ReportComplaint: React.FC = () => {
               </div>
             </div>
 
-            {/* Triage Metadata Grid */}
+            {/* Triage & Verification Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-4 rounded bg-[#F8FAFC] border border-[#E2E8F0] flex flex-col gap-1">
-                <span className="font-mono-tech text-[11px] text-[#64748B]">Location</span>
+                <span className="font-mono-tech text-[11px] text-[#64748B]">Selected Location</span>
                 <span className="text-sm font-semibold text-[#0F172A]">
                   {submittedResult.location.name}
                 </span>
                 <span className="text-xs text-[#047857] font-medium mt-0.5">
                   {submittedResult.location.verified
                     ? '✓ GPS Location Verified'
-                    : 'Manual Location Recorded'}
+                    : 'Manual Campus Location Recorded'}
                 </span>
               </div>
 
               <div className="p-4 rounded bg-[#F8FAFC] border border-[#E2E8F0] flex flex-col gap-1">
                 <span className="font-mono-tech text-[11px] text-[#64748B]">
-                  Safety Triage Assessment
+                  Priority Rationale
                 </span>
                 <span className="text-sm font-semibold text-[#0F172A]">
                   {submittedResult.priority_reason}
                 </span>
                 {submittedResult.is_recurring && (
                   <span className="text-xs font-semibold text-[#B45309] mt-0.5">
-                    ⚠ Recurring Issue Flagged ({submittedResult.previous_complaint_count} previous
-                    complaints at this location)
+                    ⚠ Recurring Issue ({submittedResult.previous_complaint_count} previous complaints logged at this location)
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Action Buttons (Section 17: Track Complaint + Report Another Issue) */}
+            {/* Action Buttons */}
             <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <button
@@ -517,7 +492,7 @@ export const ReportComplaint: React.FC = () => {
                     navigate(
                       `/track?id=${encodeURIComponent(
                         submittedResult.complaint_id
-                      )}&email=${encodeURIComponent(email.trim() || 'student@example.com')}`
+                      )}&email=${encodeURIComponent(email.trim() || 'soham@example.com')}`
                     )
                   }
                   className="h-10 px-5 rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
@@ -545,7 +520,7 @@ export const ReportComplaint: React.FC = () => {
             </div>
           </div>
         ) : (
-          /* COMPLAINT FORM (Sections 10–16) */
+          /* COMPLAINT FORM */
           <form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-6">
             {submitError && (
               <div className="p-4 rounded-lg bg-[#FEF2F2] border border-[#FECACA] flex items-center gap-3 text-xs font-medium text-[#991B1B]">
@@ -554,14 +529,14 @@ export const ReportComplaint: React.FC = () => {
               </div>
             )}
 
-            {/* SECTION A — Your Information (Section 10) */}
+            {/* SECTION 1 — Student Information */}
             <section className="bg-white border border-[#E2E8F0] rounded-lg p-6 flex flex-col gap-5">
               <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
                 <div className="flex items-center gap-2.5">
                   <span className="w-6 h-6 rounded bg-[#2563EB] text-white font-mono-tech text-xs font-bold flex items-center justify-center">
                     1
                   </span>
-                  <h2 className="text-base font-bold text-[#0F172A]">Your Information</h2>
+                  <h2 className="text-base font-bold text-[#0F172A]">Student Information</h2>
                 </div>
                 <span className="font-mono-tech text-[11px] text-[#64748B]">
                   Identity Verification
@@ -582,7 +557,7 @@ export const ReportComplaint: React.FC = () => {
                       setUserId(e.target.value);
                       if (errors.userId) setErrors({ ...errors, userId: '' });
                     }}
-                    placeholder="TEIT30"
+                    placeholder="30 or TEIT30"
                     className={`h-10 px-3 rounded border bg-white font-mono-tech text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none ${
                       errors.userId
                         ? 'border-[#DC2626] focus:ring-2 focus:ring-[#DC2626]/15'
@@ -607,7 +582,7 @@ export const ReportComplaint: React.FC = () => {
                       setName(e.target.value);
                       if (errors.name) setErrors({ ...errors, name: '' });
                     }}
-                    placeholder="Soham Palkar"
+                    placeholder="Soham"
                     className={`h-10 px-3 rounded border bg-white text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none ${
                       errors.name
                         ? 'border-[#DC2626] focus:ring-2 focus:ring-[#DC2626]/15'
@@ -630,7 +605,7 @@ export const ReportComplaint: React.FC = () => {
                       setEmail(e.target.value);
                       if (errors.email) setErrors({ ...errors, email: '' });
                     }}
-                    placeholder="student@example.com"
+                    placeholder="soham@example.com"
                     className={`h-10 px-3 rounded border bg-white text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none ${
                       errors.email
                         ? 'border-[#DC2626] focus:ring-2 focus:ring-[#DC2626]/15'
@@ -641,14 +616,14 @@ export const ReportComplaint: React.FC = () => {
                     <span className="text-xs text-[#DC2626]">{errors.email}</span>
                   ) : (
                     <span className="text-[11px] text-[#64748B]">
-                      Your Complaint ID will be emailed to this address.
+                      Confirmation email will be dispatched here.
                     </span>
                   )}
                 </div>
               </div>
             </section>
 
-            {/* SECTION B — Complaint Information (Sections 11, 12, 13) */}
+            {/* SECTION 2 — Complaint Details */}
             <section className="bg-white border border-[#E2E8F0] rounded-lg p-6 flex flex-col gap-5">
               <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
                 <div className="flex items-center gap-2.5">
@@ -657,8 +632,8 @@ export const ReportComplaint: React.FC = () => {
                   </span>
                   <h2 className="text-base font-bold text-[#0F172A]">Complaint Information</h2>
                 </div>
-                <span className="font-mono-tech text-[11px] text-[#DC2626] font-semibold">
-                  Photo Evidence Required
+                <span className="font-mono-tech text-[11px] text-[#2563EB] font-semibold">
+                  Automated Safety Triage
                 </span>
               </div>
 
@@ -681,7 +656,7 @@ export const ReportComplaint: React.FC = () => {
                 </select>
               </div>
 
-              {/* Description Field (Section 12) */}
+              {/* Description Field */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <label htmlFor="description" className="text-xs font-semibold text-[#334155]">
@@ -700,7 +675,7 @@ export const ReportComplaint: React.FC = () => {
                     setDescription(e.target.value);
                     if (errors.description) setErrors({ ...errors, description: '' });
                   }}
-                  placeholder={`Describe the problem clearly...\nExample: Sparking from an exposed electrical wire near the switchboard.`}
+                  placeholder={`Describe the maintenance issue clearly...\nExample: Sparking from exposed wire near DB Lab switchboard.`}
                   className={`p-3 rounded border bg-white text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none leading-relaxed ${
                     errors.description
                       ? 'border-[#DC2626] focus:ring-2 focus:ring-[#DC2626]/15'
@@ -712,21 +687,18 @@ export const ReportComplaint: React.FC = () => {
                 )}
               </div>
 
-              {/* Photo Upload (Section 13) */}
+              {/* Photo Upload */}
               <PhotoUploader
                 value={photo}
                 onChange={(newPhoto) => {
                   setPhoto(newPhoto);
-                  if (newPhoto && errors.photo) {
-                    setErrors({ ...errors, photo: '' });
-                  }
                 }}
                 category={category}
                 error={errors.photo}
               />
             </section>
 
-            {/* SECTION C — Campus Location & GPS Result (Sections 14 & 15) */}
+            {/* SECTION 3 — Campus Location Selector */}
             <section className="bg-white border border-[#E2E8F0] rounded-lg p-6 flex flex-col gap-5">
               <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
                 <div className="flex items-center gap-2.5">
@@ -736,75 +708,27 @@ export const ReportComplaint: React.FC = () => {
                   <h2 className="text-base font-bold text-[#0F172A]">Campus Location</h2>
                 </div>
                 <span className="font-mono-tech text-[11px] text-[#047857]">
-                  Geofence Cross-Check
+                  Backend Authoritative Dataset
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Building */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="building" className="text-xs font-semibold text-[#334155]">
-                    Building <span className="text-[#DC2626]">*</span>
-                  </label>
-                  <select
-                    id="building"
-                    value={building}
-                    onChange={(e) => handleBuildingChange(e.target.value)}
-                    className="h-10 px-3 rounded border border-[#CBD5E1] bg-white text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
-                  >
-                    {Object.keys(CAMPUS_BUILDINGS).map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Dedicated Location Selector Component */}
+              <LocationSelector
+                value={locationId}
+                onChange={(newId, locObj) => {
+                  setLocationId(newId);
+                  setSelectedLocation(locObj);
+                  if (errors.locationId) setErrors({ ...errors, locationId: '' });
+                }}
+                error={errors.locationId}
+              />
 
-                {/* Floor */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="floor" className="text-xs font-semibold text-[#334155]">
-                    Floor <span className="text-[#DC2626]">*</span>
-                  </label>
-                  <select
-                    id="floor"
-                    value={floor}
-                    onChange={(e) => handleFloorChange(e.target.value)}
-                    className="h-10 px-3 rounded border border-[#CBD5E1] bg-white text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
-                  >
-                    {availableFloors.map((fl) => (
-                      <option key={fl} value={fl}>
-                        {fl}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Room / Lab */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="room" className="text-xs font-semibold text-[#334155]">
-                    Room / Lab <span className="text-[#DC2626]">*</span>
-                  </label>
-                  <select
-                    id="room"
-                    value={room}
-                    onChange={(e) => setRoom(e.target.value)}
-                    className="h-10 px-3 rounded border border-[#CBD5E1] bg-white text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15"
-                  >
-                    {availableRooms.map((rm) => (
-                      <option key={rm} value={rm}>
-                        {rm}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* GPS Location Result Card (Section 15) */}
+              {/* GPS Location Result Card */}
               {photo && locationPreview && (
                 <LocationCard
-                  userBuilding={building}
-                  userFloor={floor}
-                  userRoom={room}
+                  userBuilding={selectedLocation?.building || 'Xavier Institute of Engineering'}
+                  userFloor={selectedLocation ? `Floor ${selectedLocation.floor}` : 'Floor 1'}
+                  userRoom={selectedLocation?.room || 'DB Lab'}
                   hasGps={locationPreview.has_gps}
                   detectedBuilding={locationPreview.detected_building}
                   detectedFloor={locationPreview.detected_floor}
@@ -817,7 +741,7 @@ export const ReportComplaint: React.FC = () => {
               )}
             </section>
 
-            {/* Submit Button (Section 16) */}
+            {/* Submit Button */}
             <div className="flex items-center justify-end gap-4 pt-2">
               <button
                 type="submit"
@@ -827,7 +751,7 @@ export const ReportComplaint: React.FC = () => {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Submitting...</span>
+                    <span>Submitting Complaint...</span>
                   </>
                 ) : (
                   <span>Submit Complaint</span>

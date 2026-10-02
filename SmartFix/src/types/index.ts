@@ -21,16 +21,30 @@ export interface Worker {
   name: string;
   specialization: string;
   email: string;
+  phone?: string;
   license?: string;
   duty_id?: string;
   active_jobs?: number;
 }
 
+export interface CampusLocation {
+  id?: number;
+  location_id: string;
+  building: string;
+  floor: number;
+  room: string;
+  location_name: string;
+  latitude: number;
+  longitude: number;
+  radius_m?: number;
+}
+
 export interface Location {
   building: string;
-  floor: string;
+  floor: string | number;
   room: string;
   name?: string;
+  location_id?: string;
   latitude?: number;
   longitude?: number;
   detected_building?: string;
@@ -64,6 +78,7 @@ export interface Complaint {
 
   user: User;
   location: Location;
+  location_id?: string;
 
   priority: PriorityLevel;
   priority_reason?: string;
@@ -77,6 +92,8 @@ export interface Complaint {
 
   assigned_worker?: Worker;
   email_sent?: boolean;
+  confirmation_email_sent?: boolean;
+  confirmation_email_error?: string;
 
   status: ComplaintStatus;
   timeline: ComplaintTimelineItem[];
@@ -127,6 +144,7 @@ export interface CreateComplaintResponse {
     building: string;
     floor: string;
     room: string;
+    location_id?: string;
     detected_name?: string;
     latitude?: number;
     longitude?: number;
@@ -139,6 +157,8 @@ export interface CreateComplaintResponse {
   user_email_recipient?: string;
   email_sent_at?: string;
   email_subject?: string;
+  data?: Record<string, unknown>;
+  message?: string;
 }
 
 export interface TrackComplaintResponse {

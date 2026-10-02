@@ -94,39 +94,28 @@ export const TrackComplaint: React.FC = () => {
 
           {/* Sample Ticket Switcher for Demo Testing */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[#64748B] font-medium">Sample IDs:</span>
+            <span className="text-[#64748B] font-medium">Quick Demo Samples:</span>
             <button
               type="button"
-              onClick={() => handleSelectQuickSample('COM-2026-0001', 'student@example.com')}
+              onClick={() => handleSelectQuickSample('HIST001', 'student.a@campus.edu')}
               className={`px-2.5 py-1 rounded border font-mono-tech text-xs transition-colors cursor-pointer ${
-                complaintId === 'COM-2026-0001'
+                complaintId === 'HIST001'
                   ? 'bg-[#2563EB] text-white border-[#2563EB]'
                   : 'bg-white text-[#475569] border-[#CBD5E1] hover:text-[#0F172A]'
               }`}
             >
-              COM-2026-0001
+              HIST001 (DB Lab)
             </button>
             <button
               type="button"
-              onClick={() => handleSelectQuickSample('COM-2026-0002', 'priya.nair@campus.edu')}
+              onClick={() => handleSelectQuickSample('HIST004', 'student.d@campus.edu')}
               className={`px-2.5 py-1 rounded border font-mono-tech text-xs transition-colors cursor-pointer ${
-                complaintId === 'COM-2026-0002'
+                complaintId === 'HIST004'
                   ? 'bg-[#2563EB] text-white border-[#2563EB]'
                   : 'bg-white text-[#475569] border-[#CBD5E1] hover:text-[#0F172A]'
               }`}
             >
-              COM-2026-0002
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectQuickSample('COM-2026-0003', 'rohan.k@campus.edu')}
-              className={`px-2.5 py-1 rounded border font-mono-tech text-xs transition-colors cursor-pointer ${
-                complaintId === 'COM-2026-0003'
-                  ? 'bg-[#2563EB] text-white border-[#2563EB]'
-                  : 'bg-white text-[#475569] border-[#CBD5E1] hover:text-[#0F172A]'
-              }`}
-            >
-              COM-2026-0003
+              HIST004 (Washroom)
             </button>
           </div>
         </div>

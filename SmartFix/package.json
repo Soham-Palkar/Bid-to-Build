@@ -4,8 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "start": "tsx server.ts",
+    "dev": "vite",
+    "dev:mock": "tsx server.ts",
+    "start": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

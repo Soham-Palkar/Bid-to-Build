@@ -1,0 +1,11 @@
+complaint_id,user_identifier,user_name,user_email,category,location_id,description,priority,priority_reason,status
+HIST001,TEIT30,Student A,student.a@campus.edu,Electrical,LOC001,Sparking from an electrical socket near the DB Lab switchboard.,High,Electrical safety hazard,Resolved
+HIST002,TEIT31,Student B,student.b@campus.edu,Electrical,LOC001,Faulty electrical wiring and flickering sockets near DB Lab.,High,Electrical safety hazard,Resolved
+HIST003,TEIT32,Student C,student.c@campus.edu,Electrical,LOC001,Power socket and exposed wiring issue in the DB Lab.,Medium,Electrical fixture issue,Resolved
+HIST004,TEIT33,Student D,student.d@campus.edu,Plumbing,LOC004,Water leakage near the wash basin in First Floor Men's Washroom.,High,Major water leakage hazard,Resolved
+HIST005,TEIT34,Student E,student.e@campus.edu,Plumbing,LOC004,Blocked drainage and water pooling in Men's Washroom.,Medium,Plumbing drainage issue,Resolved
+HIST006,TEIT35,Student F,student.f@campus.edu,Plumbing,LOC004,Tap leakage and continuous water dripping near wash area.,High,Continuous plumbing leakage,Resolved
+HIST007,TEIT36,Student G,student.g@campus.edu,Furniture,LOC002,Broken classroom bench and chair in CC Lab.,Medium,Damaged furniture repair,Resolved
+HIST008,TEIT37,Student H,student.h@campus.edu,HVAC,LOC003,Ceiling fan not working and making rattling noise in Software Lab.,Medium,HVAC ventilation failure,Resolved
+HIST009,TEIT38,Student I,student.i@campus.edu,Electrical,LOC002,Light fixture and tube light not working in CC Lab.,Medium,Lighting fixture issue,Resolved
+HIST010,TEIT39,Student J,student.j@campus.edu,Civil / Infrastructure,LOC003,Minor wall plaster damage and peeling near Software Lab entrance.,Low,Cosmetic wall repair,Resolved

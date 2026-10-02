@@ -3,11 +3,11 @@ import { MapPin, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 interface LocationCardProps {
   userBuilding: string;
-  userFloor: string;
+  userFloor: string | number;
   userRoom: string;
   hasGps: boolean;
   detectedBuilding?: string;
-  detectedFloor?: string;
+  detectedFloor?: string | number;
   detectedRoom?: string;
   latitude?: number;
   longitude?: number;

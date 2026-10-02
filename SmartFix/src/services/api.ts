@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type {
+  CampusLocation,
   Complaint,
   ComplaintStatus,
   CreateComplaintResponse,
@@ -46,9 +47,7 @@ export interface CreateComplaintPayload {
   name: string;
   email: string;
   category: string;
-  building: string;
-  floor: string;
-  room: string;
+  location_id: string;
   description: string;
   photo?: File | null;
   photo_data_url?: string;
@@ -57,10 +56,13 @@ export interface CreateComplaintPayload {
   gps_mode?: 'verified' | 'mismatch' | 'none';
 }
 
+export async function getLocations(): Promise<CampusLocation[]> {
+  const { data } = await apiClient.get<{ success: boolean; data: CampusLocation[] }>('/locations');
+  return data.data || [];
+}
+
 export async function detectPhotoLocation(params: {
-  building: string;
-  floor: string;
-  room: string;
+  location_id: string;
   gps_mode: 'verified' | 'mismatch' | 'none';
 }): Promise<{
   has_gps: boolean;
@@ -80,22 +82,19 @@ export async function detectPhotoLocation(params: {
 export async function createComplaint(
   payload: CreateComplaintPayload
 ): Promise<CreateComplaintResponse> {
-  // If pointing to an external backend expecting multipart/form-data, send FormData;
-  // for our built-in Express endpoint, JSON with base64 preview also works seamlessly.
-  const isExternal =
-    API_BASE_URL.startsWith('http') && !API_BASE_URL.includes(window.location.host);
-
-  if (isExternal && payload.photo) {
+  // If a physical File object is provided, send multipart/form-data
+  if (payload.photo) {
     const formData = new FormData();
     formData.append('user_id', payload.user_id);
     formData.append('name', payload.name);
     formData.append('email', payload.email);
     formData.append('category', payload.category);
-    formData.append('building', payload.building);
-    formData.append('floor', payload.floor);
-    formData.append('room', payload.room);
+    formData.append('location_id', payload.location_id);
     formData.append('description', payload.description);
     formData.append('photo', payload.photo);
+    if (payload.gps_mode) {
+      formData.append('gps_mode', payload.gps_mode);
+    }
 
     const { data } = await apiClient.post<CreateComplaintResponse>('/complaints', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -108,9 +107,7 @@ export async function createComplaint(
     name: payload.name,
     email: payload.email,
     category: payload.category,
-    building: payload.building,
-    floor: payload.floor,
-    room: payload.room,
+    location_id: payload.location_id,
     description: payload.description,
     photo_data_url: payload.photo_data_url,
     photo_filename: payload.photo_filename,
@@ -153,11 +150,13 @@ export async function getAdminComplaints(filters?: {
   priority?: string;
   category?: string;
   search?: string;
+  location_id?: string;
 }): Promise<Complaint[]> {
   const params: Record<string, string> = {};
   if (filters?.status && filters.status !== 'All') params.status = filters.status;
   if (filters?.priority && filters.priority !== 'All') params.priority = filters.priority;
   if (filters?.category && filters.category !== 'All') params.category = filters.category;
+  if (filters?.location_id && filters.location_id !== 'All') params.location_id = filters.location_id;
   if (filters?.search && filters.search.trim() !== '') params.search = filters.search.trim();
 
   const { data } = await apiClient.get<Complaint[]>('/admin/complaints', { params });
@@ -226,3 +225,4 @@ export async function resendComplaintEmail(
   return data;
 }
 
+export type { CampusLocation };
