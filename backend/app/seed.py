@@ -52,11 +52,12 @@ def seed_database():
             db.session.commit()
             print("[+] Default Admin account created (username: admin, password: admin123)")
 
-        # 4. Seed Demo Maintenance Workers
+        # 4. Seed Maintenance Workers with Configurable Real Inboxes
+        primary_email = os.environ.get('SMTP_USERNAME', '202403047.sohamgpp@student.xavier.ac.in')
         workers_data = [
             {
                 "name": "Raj Patil",
-                "email": "raj.patil@campus.edu",
+                "email": os.environ.get('WORKER_EMAIL_1', primary_email),
                 "specialization": "Electrical",
                 "phone": "+91 98200 11223",
                 "license": "LIC-ELE-8821",
@@ -64,7 +65,7 @@ def seed_database():
             },
             {
                 "name": "Amit Shah",
-                "email": "amit.shah@campus.edu",
+                "email": os.environ.get('WORKER_EMAIL_2', primary_email),
                 "specialization": "Plumbing",
                 "phone": "+91 98200 44556",
                 "license": "LIC-PLU-4012",
@@ -72,7 +73,7 @@ def seed_database():
             },
             {
                 "name": "Neha Joshi",
-                "email": "neha.joshi@campus.edu",
+                "email": os.environ.get('WORKER_EMAIL_3', primary_email),
                 "specialization": "HVAC",
                 "phone": "+91 98200 77889",
                 "license": "LIC-HVA-6503",
@@ -81,7 +82,7 @@ def seed_database():
         ]
 
         for w_data in workers_data:
-            worker = Worker.query.filter_by(email=w_data['email']).first()
+            worker = Worker.query.filter_by(name=w_data['name']).first()
             if not worker:
                 worker = Worker(
                     name=w_data['name'],
@@ -92,8 +93,11 @@ def seed_database():
                     duty_id=w_data['duty_id']
                 )
                 db.session.add(worker)
+            else:
+                worker.email = w_data['email']
+                worker.specialization = w_data['specialization']
         db.session.commit()
-        print("[+] Demo maintenance specialists created (Raj Patil, Amit Shah, Neha Joshi)")
+        print(f"[+] Maintenance specialists created/updated with active inboxes ({primary_email})")
 
         # 5. Seed Historical Complaints for Recurrence Demonstration
         complaints_csv = DATA_DIR / 'seed_complaints.csv'

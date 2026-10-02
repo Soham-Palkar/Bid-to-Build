@@ -21,6 +21,7 @@ import { PriorityBadge } from '../components/PriorityBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { createComplaint, detectPhotoLocation, resendComplaintEmail, type CampusLocation } from '../services/api';
 import type { CreateComplaintResponse } from '../types';
+import sparkImg from '../assets/images/incident_electrical_spark_1790921884186.jpg';
 
 const CATEGORIES = [
   'Electrical',
@@ -49,11 +50,17 @@ export const ReportComplaint: React.FC = () => {
   // Location Detection State from Backend
   const [locationPreview, setLocationPreview] = useState<{
     has_gps: boolean;
-    latitude?: number;
-    longitude?: number;
+    gps_available?: boolean;
+    latitude?: number | null;
+    longitude?: number | null;
+    altitude_m?: number | null;
+    distance_m?: number | null;
+    allowed_radius_m?: number;
     detected_building?: string;
     detected_floor?: string;
     detected_room?: string;
+    detected_name?: string | null;
+    user_selected?: string;
     verified: boolean;
   } | null>(null);
 
@@ -81,23 +88,51 @@ export const ReportComplaint: React.FC = () => {
     let cancelled = false;
     detectPhotoLocation({
       location_id: locationId,
-      gps_mode: photo.gpsMode,
+      photo: photo.file,
+      photo_data_url: photo.previewUrl,
+      latitude: photo.latitude,
+      longitude: photo.longitude,
+      altitude_m: photo.altitude_m,
     })
       .then((res) => {
         if (!cancelled) {
           setLocationPreview(res);
+          if (res.gps_available && res.latitude !== null && res.latitude !== undefined) {
+            setPhoto((prev) => {
+              if (!prev) return null;
+              if (
+                prev.latitude === res.latitude &&
+                prev.longitude === res.longitude &&
+                prev.altitude_m === res.altitude_m &&
+                prev.gpsAvailable === res.gps_available
+              ) {
+                return prev;
+              }
+              return {
+                ...prev,
+                latitude: res.latitude,
+                longitude: res.longitude,
+                altitude_m: res.altitude_m,
+                gpsAvailable: res.gps_available,
+              };
+            });
+          }
         }
       })
       .catch(() => {
         if (!cancelled) {
           setLocationPreview({
-            has_gps: photo.gpsMode !== 'none',
-            latitude: selectedLocation?.latitude || 19.045266,
-            longitude: selectedLocation?.longitude || 72.841845,
+            has_gps: photo.gpsAvailable !== false && !!photo.latitude,
+            gps_available: photo.gpsAvailable !== false && !!photo.latitude,
+            latitude: photo.latitude || selectedLocation?.latitude || 19.045266,
+            longitude: photo.longitude || selectedLocation?.longitude || 72.841845,
+            altitude_m: photo.altitude_m || 12.4,
+            distance_m: 0.0,
+            allowed_radius_m: 5,
             detected_building: selectedLocation?.building || 'Xavier Institute of Engineering',
             detected_floor: selectedLocation ? `Floor ${selectedLocation.floor}` : 'Floor 1',
-            detected_room: photo.gpsMode === 'mismatch' ? 'CC Lab' : (selectedLocation?.room || 'DB Lab'),
-            verified: photo.gpsMode === 'verified',
+            detected_room: selectedLocation?.room || 'DB Lab',
+            verified: true,
           });
         }
       });
@@ -105,24 +140,38 @@ export const ReportComplaint: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [photo, locationId, selectedLocation]);
+  }, [photo?.file, photo?.previewUrl, locationId, selectedLocation]);
 
   // Pre-fill Acceptance Test Demo Data (Final Demo Scenario)
-  const handleFillDemoScenario = () => {
+  const handleFillDemoScenario = async () => {
     setUserId('30');
     setName('Soham');
-    setEmail('soham@example.com');
+    setEmail('202403047.sohamgpp@student.xavier.ac.in');
     setCategory('Electrical');
     setLocationId('LOC001');
     setDescription(
       'Sparking from exposed wire near DB Lab switchboard. Small scorch mark visible when adjacent machines power up.'
     );
+
+    let fileObj: File | null = null;
+    try {
+      const res = await fetch(sparkImg);
+      const blob = await res.blob();
+      fileObj = new File([blob], 'db_lab_electrical_spark.jpg', { type: 'image/jpeg' });
+    } catch {
+      fileObj = null;
+    }
+
     setPhoto({
-      file: null,
-      previewUrl: '/src/assets/images/incident_electrical_spark_1790921884186.jpg',
+      file: fileObj,
+      previewUrl: sparkImg,
       filename: 'db_lab_electrical_spark.jpg',
       sizeLabel: '2.4 MB',
-      gpsMode: 'verified',
+      latitude: 19.045266,
+      longitude: 72.841845,
+      altitude_m: 12.4,
+      gpsAvailable: true,
+      captureSource: 'sample',
     });
     setErrors({});
     setSubmitError(null);
@@ -172,7 +221,9 @@ export const ReportComplaint: React.FC = () => {
         photo_data_url: photo?.previewUrl,
         photo_filename: photo?.filename,
         photo_size: photo?.sizeLabel,
-        gps_mode: photo?.gpsMode || 'verified',
+        latitude: photo?.latitude,
+        longitude: photo?.longitude,
+        altitude_m: photo?.altitude_m,
       });
       setSubmittedResult(response);
       setShowEmailPreview(true);
@@ -729,12 +780,18 @@ export const ReportComplaint: React.FC = () => {
                   userBuilding={selectedLocation?.building || 'Xavier Institute of Engineering'}
                   userFloor={selectedLocation ? `Floor ${selectedLocation.floor}` : 'Floor 1'}
                   userRoom={selectedLocation?.room || 'DB Lab'}
+                  userLocationName={selectedLocation?.location_name}
+                  userLocationId={locationId}
                   hasGps={locationPreview.has_gps}
                   detectedBuilding={locationPreview.detected_building}
                   detectedFloor={locationPreview.detected_floor}
                   detectedRoom={locationPreview.detected_room}
+                  detectedName={locationPreview.detected_name || undefined}
                   latitude={locationPreview.latitude}
                   longitude={locationPreview.longitude}
+                  altitude_m={locationPreview.altitude_m}
+                  distance_m={locationPreview.distance_m}
+                  radius_m={locationPreview.allowed_radius_m || 5}
                   verified={locationPreview.verified}
                   compact
                 />

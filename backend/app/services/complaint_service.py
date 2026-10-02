@@ -67,41 +67,67 @@ def create_complaint_pipeline(form_data: dict, photo_file=None) -> tuple[bool, d
     # 4. Generate Problem ID
     complaint_id = generate_complaint_id()
 
-    # 5. Save photo
+    # 5. Save photo persistently to uploads/
     saved_filename = None
     saved_path = None
     photo_size_str = form_data.get('photo_size', '1.5 MB')
 
-    # Handle file upload or base64 or sample photo
+    os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+
+    # Handle multipart file upload
     if photo_file and hasattr(photo_file, 'filename') and photo_file.filename:
-        os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
         orig_filename = secure_filename(photo_file.filename)
         ext = orig_filename.rsplit('.', 1)[-1].lower() if '.' in orig_filename else 'jpg'
         saved_filename = f"{complaint_id}_{uuid.uuid4().hex[:8]}.{ext}"
         saved_path = os.path.join(Config.UPLOAD_FOLDER, saved_filename)
         photo_file.save(saved_path)
-    elif form_data.get('photo_data_url'):
-        # If client sent data URL preview
-        saved_path = form_data.get('photo_data_url')
-        saved_filename = form_data.get('photo_filename', f"{complaint_id}_evidence.jpg")
+    elif form_data.get('photo_data_url') and str(form_data.get('photo_data_url')).startswith('data:image/'):
+        # Decode base64 data URL into physical file on disk
+        try:
+            import base64
+            data_url = str(form_data.get('photo_data_url'))
+            header, encoded = data_url.split(',', 1)
+            ext = 'jpg'
+            if 'png' in header:
+                ext = 'png'
+            elif 'webp' in header:
+                ext = 'webp'
+            img_bytes = base64.b64decode(encoded)
+            saved_filename = f"{complaint_id}_{uuid.uuid4().hex[:8]}.{ext}"
+            saved_path = os.path.join(Config.UPLOAD_FOLDER, saved_filename)
+            with open(saved_path, 'wb') as f:
+                f.write(img_bytes)
+        except Exception:
+            saved_filename = form_data.get('photo_filename', f"{complaint_id}_evidence.jpg")
+            saved_path = None
+    elif form_data.get('photo_data_url') and 'assets/images' in str(form_data.get('photo_data_url')):
+        # Copy frontend sample image to persistent uploads folder
+        import shutil
+        sample_rel = str(form_data.get('photo_data_url')).lstrip('/')
+        # Look in workspace SmartFix/src/assets/images
+        possible_src = os.path.join(os.path.dirname(Config.UPLOAD_FOLDER), '..', 'SmartFix', sample_rel)
+        if not os.path.exists(possible_src):
+            possible_src = os.path.join(os.path.dirname(Config.UPLOAD_FOLDER), '..', 'SmartFix', 'src', 'assets', 'images', os.path.basename(sample_rel))
+        
+        saved_filename = f"{complaint_id}_{uuid.uuid4().hex[:8]}.jpg"
+        saved_path = os.path.join(Config.UPLOAD_FOLDER, saved_filename)
+        if os.path.exists(possible_src):
+            shutil.copyfile(possible_src, saved_path)
+        else:
+            saved_filename = form_data.get('photo_filename', f"{complaint_id}_evidence.jpg")
 
     # 6. Extract EXIF GPS if available
-    gps_data = {"latitude": None, "longitude": None}
+    gps_data = {"gps_available": False, "latitude": None, "longitude": None, "altitude_m": None}
     if saved_path and os.path.exists(saved_path):
         gps_data = extract_gps_from_image(saved_path)
 
-    # Allow client simulated gps_mode override if in demo testing
-    gps_mode = form_data.get('gps_mode')
-    if gps_mode == 'verified' and gps_data['latitude'] is None:
-        gps_data['latitude'] = location.latitude
-        gps_data['longitude'] = location.longitude
-    elif gps_mode == 'mismatch' and gps_data['latitude'] is None:
-        # Set coordinates closer to another room (e.g. LOC002 CC Lab)
-        gps_data['latitude'] = 19.045009
-        gps_data['longitude'] = 72.842012
-
-    # 7. Verify location
-    geo_check = verify_complaint_location(location.location_id, gps_data['latitude'], gps_data['longitude'])
+    # 7. Verify location (Haversine against selected location radius)
+    geo_check = verify_complaint_location(
+        location.location_id,
+        gps_data.get('latitude'),
+        gps_data.get('longitude'),
+        gps_data.get('altitude_m')
+    )
 
     # 8. Detect priority
     priority_res = detect_priority(category, description)
@@ -119,10 +145,13 @@ def create_complaint_pipeline(form_data: dict, photo_file=None) -> tuple[bool, d
         photo_filename=saved_filename,
         photo_size=photo_size_str,
         location_id=location.location_id,
-        detected_location_id=geo_check['detected_location_id'],
-        latitude=geo_check['photo_latitude'],
-        longitude=geo_check['photo_longitude'],
-        location_verified=geo_check['verified'],
+        detected_location_id=geo_check.get('detected_location_id'),
+        latitude=geo_check.get('photo_latitude'),
+        longitude=geo_check.get('photo_longitude'),
+        altitude_m=geo_check.get('photo_altitude_m') or geo_check.get('altitude_m'),
+        location_verified=geo_check.get('verified', False),
+        gps_distance_m=geo_check.get('distance_m'),
+        gps_radius_m=geo_check.get('allowed_radius_m', 5.0),
         priority=priority_res['priority'],
         priority_score=priority_res['score'],
         priority_reason=priority_res['reason'],

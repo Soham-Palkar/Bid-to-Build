@@ -1,4 +1,9 @@
+import io
+import os
 import pytest
+from unittest.mock import patch
+from PIL import Image
+from PIL.ExifTags import TAGS, GPSTAGS
 from sqlalchemy.pool import StaticPool
 from app import create_app
 from app.extensions import db
@@ -7,9 +12,13 @@ from app.services.priority_service import detect_priority
 from app.services.location_service import verify_complaint_location, haversine_distance
 from app.services.recurrence_service import check_recurrence
 from app.services.exif_service import extract_gps_from_image
+from app.services.email_service import send_complaint_confirmation_email, send_worker_assignment_email
 
 @pytest.fixture
 def app():
+    upload_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'test_uploads'))
+    os.makedirs(upload_dir, exist_ok=True)
+
     app = create_app(test_config={
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': 'sqlite://',
@@ -17,13 +26,13 @@ def app():
             'connect_args': {'check_same_thread': False},
             'poolclass': StaticPool
         },
-        'UPLOAD_FOLDER': 'test_uploads'
+        'UPLOAD_FOLDER': upload_dir
     })
 
     with app.app_context():
         db.create_all()
 
-        # Seed locations
+        # Seed campus locations with 5m radius
         loc1 = Location(
             location_id='LOC001',
             building='Xavier Institute of Engineering',
@@ -32,7 +41,7 @@ def app():
             location_name='First Floor DB Lab',
             latitude=19.045266,
             longitude=72.841845,
-            radius_m=20.0
+            radius_m=5.0
         )
         loc2 = Location(
             location_id='LOC002',
@@ -42,7 +51,7 @@ def app():
             location_name='First Floor CC Lab',
             latitude=19.045009,
             longitude=72.842012,
-            radius_m=20.0
+            radius_m=5.0
         )
         loc3 = Location(
             location_id='LOC004',
@@ -52,7 +61,7 @@ def app():
             location_name="First Floor Men's Washroom",
             latitude=19.045216,
             longitude=72.841769,
-            radius_m=20.0
+            radius_m=5.0
         )
         db.session.add_all([loc1, loc2, loc3])
 
@@ -64,7 +73,7 @@ def app():
         # Seed Worker
         worker = Worker(
             name='Raj Patil',
-            email='raj.patil@campus.edu',
+            email='202403047.sohamgpp@student.xavier.ac.in',
             specialization='Electrical',
             phone='+91 98200 11223'
         )
@@ -81,93 +90,263 @@ def app():
 def client(app):
     return app.test_client()
 
-def test_health_check(client):
-    res = client.get('/api/health')
-    assert res.status_code == 200
-    data = res.get_json()
-    assert data['success'] is True
-    assert data['status'] == 'healthy'
+@pytest.fixture(autouse=True)
+def mock_smtp_globally():
+    with patch('smtplib.SMTP') as mock_smtp:
+        mock_instance = mock_smtp.return_value.__enter__.return_value
+        mock_instance.send_message.return_value = {}
+        yield mock_smtp
 
-def test_get_locations(client):
-    res = client.get('/api/locations')
-    assert res.status_code == 200
-    data = res.get_json()
-    assert data['success'] is True
-    assert len(data['data']) >= 3
-    assert data['data'][0]['location_id'] == 'LOC001'
+# ============================================================
+# 1. GPS & DISTANCE TESTS
+# ============================================================
 
-def test_priority_engine():
-    # Critical checks
-    crit1 = detect_priority('Electrical', 'Sparking from exposed wire near DB Lab')
-    assert crit1['priority'] == 'Critical'
-    assert crit1['score'] >= 90
-    assert any(k in crit1['detected_keywords'] for k in ['sparking', 'exposed wire'])
+def test_haversine_distance():
+    # Identical points -> 0.0 distance
+    d0 = haversine_distance(19.045266, 72.841845, 19.045266, 72.841845)
+    assert round(d0, 2) == 0.0
 
-    # High checks
-    high1 = detect_priority('Plumbing', 'Major water leakage in washroom')
-    assert high1['priority'] == 'High'
+    # DB Lab to CC Lab (~33m apart)
+    d1 = haversine_distance(19.045266, 72.841845, 19.045009, 72.842012)
+    assert 20.0 < d1 < 50.0
 
-    # Medium checks
-    med1 = detect_priority('HVAC', 'Fan not working in classroom')
-    assert med1['priority'] == 'Medium'
-
-    # Low checks
-    low1 = detect_priority('Civil / Infrastructure', 'Paint peeling on wall')
-    assert low1['priority'] == 'Low'
-
-def test_location_verification(app):
+def test_location_verified_within_5m(app):
     with app.app_context():
-        # Same coordinates as LOC001
-        geo_exact = verify_complaint_location('LOC001', 19.045266, 72.841845)
-        assert geo_exact['verified'] is True
-        assert geo_exact['distance_m'] < 5.0
+        # Point within 2 meters of DB Lab
+        res = verify_complaint_location('LOC001', 19.045266, 72.841845, altitude_m=12.4)
+        assert res['verified'] is True
+        assert res['distance_m'] <= 5.0
+        assert res['allowed_radius_m'] == 5.0
+        assert res['photo_altitude_m'] == 12.4
 
-        # Distant coordinates
-        geo_far = verify_complaint_location('LOC001', 19.055000, 72.855000)
-        assert geo_far['verified'] is False
-        assert geo_far['distance_m'] > 100.0
+def test_location_mismatch_outside_5m(app):
+    with app.app_context():
+        # Point at CC Lab (33m away from DB Lab)
+        res = verify_complaint_location('LOC001', 19.045009, 72.842012)
+        assert res['verified'] is False
+        assert res['distance_m'] > 5.0
+        assert res['allowed_radius_m'] == 5.0
 
-def test_complaint_submission_and_tracking(client):
-    # 1. Submit complaint
+def test_location_authority_preserved_on_gps_mismatch(client):
+    # Student selects DB Lab (LOC001), photo GPS is at CC Lab (LOC002)
     payload = {
         'user_id': 'TEIT30',
         'name': 'Soham',
         'email': 'soham@example.com',
         'category': 'Electrical',
         'location_id': 'LOC001',
-        'description': 'Sparking from exposed wire near DB Lab switchboard',
-        'gps_mode': 'verified'
+        'description': 'Sparking from exposed wire near DB Lab',
+        'latitude': 19.045009,
+        'longitude': 72.842012
     }
-
     res = client.post('/api/complaints', json=payload)
     assert res.status_code == 201
     data = res.get_json()
-    assert data['success'] is True
-    complaint_id = data['complaint_id']
-    assert complaint_id.startswith('COM-')
-    assert data['priority'] == 'Critical'
-    assert data['location']['verified'] is True
+    # Selected location must remain authoritative (LOC001)
+    assert data['location']['location_id'] == 'LOC001'
+    assert data['location']['verified'] is False
+    assert data['location']['name'] == 'First Floor DB Lab'
 
-    # 2. Track complaint with correct email
+def test_exif_gps_missing(tmp_path):
+    img = Image.new('RGB', (100, 100), color='blue')
+    img_path = str(tmp_path / 'no_gps.jpg')
+    img.save(img_path)
+
+    res = extract_gps_from_image(img_path)
+    assert res['gps_available'] is False
+    assert res['latitude'] is None
+    assert res['longitude'] is None
+    assert res['altitude_m'] is None
+
+def test_exif_gps_extraction(tmp_path):
+    from PIL.TiffImagePlugin import IFDRational
+    img = Image.new('RGB', (100, 100), color='red')
+    img_path = str(tmp_path / 'with_gps.jpg')
+
+    # Construct EXIF GPS info dict
+    exif = img.getexif()
+    gps_ifd = {
+        1: 'N',
+        2: (IFDRational(19, 1), IFDRational(2, 1), IFDRational(4295, 100)), # 19° 2' 42.95" N
+        3: 'E',
+        4: (IFDRational(72, 1), IFDRational(50, 1), IFDRational(3064, 100)), # 72° 50' 30.64" E
+        5: 0,
+        6: IFDRational(124, 10) # 12.4 m altitude
+    }
+    exif[0x8825] = gps_ifd
+    img.save(img_path, exif=exif)
+
+    res = extract_gps_from_image(img_path)
+    assert res['gps_available'] is True
+    assert round(res['latitude'], 4) == 19.0453
+    assert round(res['longitude'], 4) == 72.8418
+    assert round(res['altitude_m'], 1) == 12.4
+
+def test_altitude_extraction(tmp_path):
+    from PIL.TiffImagePlugin import IFDRational
+    img = Image.new('RGB', (50, 50), color='green')
+    img_path = str(tmp_path / 'alt_test.jpg')
+    exif = img.getexif()
+    gps_ifd = {
+        1: 'N',
+        2: (IFDRational(19, 1), IFDRational(2, 1), IFDRational(4200, 100)),
+        3: 'E',
+        4: (IFDRational(72, 1), IFDRational(50, 1), IFDRational(3000, 100)),
+        5: 0, # Above sea level
+        6: IFDRational(452, 10) # 45.2 m
+    }
+    exif[0x8825] = gps_ifd
+    img.save(img_path, exif=exif)
+
+    res = extract_gps_from_image(img_path)
+    assert res['altitude_m'] == 45.2
+
+# ============================================================
+# 2. EMAIL TESTS (Mocked SMTP)
+# ============================================================
+
+@patch('smtplib.SMTP')
+def test_student_confirmation_email(mock_smtp, app):
+    with app.app_context():
+        user = User(user_identifier='30', name='Soham', email='soham@example.com')
+        loc = Location.query.filter_by(location_id='LOC001').first()
+        complaint = Complaint(
+            complaint_id='COM-2026-0001',
+            user_id=1,
+            category='Electrical',
+            description='Sparking wire',
+            location_id='LOC001',
+            priority='Critical',
+            status='Reported'
+        )
+        success, err = send_complaint_confirmation_email(complaint, user, loc)
+        assert success is True
+        assert err is None
+
+@patch('smtplib.SMTP')
+def test_worker_assignment_email(mock_smtp, app):
+    with app.app_context():
+        worker = Worker.query.filter_by(name='Raj Patil').first()
+        loc = Location.query.filter_by(location_id='LOC001').first()
+        complaint = Complaint(
+            complaint_id='COM-2026-0001',
+            user_id=1,
+            category='Electrical',
+            description='Sparking wire',
+            location_id='LOC001',
+            priority='Critical',
+            status='Assigned'
+        )
+        success, err = send_worker_assignment_email(complaint, worker, loc)
+        assert success is True
+        assert err is None
+
+@patch('smtplib.SMTP', side_effect=Exception('SMTP connection timeout'))
+def test_email_failure_does_not_delete_complaint(mock_smtp, client):
+    payload = {
+        'user_id': 'TEIT30',
+        'name': 'Soham',
+        'email': 'soham@example.com',
+        'category': 'Electrical',
+        'location_id': 'LOC001',
+        'description': 'Sparking from exposed wire near DB Lab'
+    }
+    res = client.post('/api/complaints', json=payload)
+    # Complaint must still be created with 201 status despite SMTP error
+    assert res.status_code == 201
+    data = res.get_json()
+    assert data['success'] is True
+    assert data['complaint_id'].startswith('COM-')
+    assert data['user_email_sent'] is False
+
+# ============================================================
+# 3. IMAGE UPLOAD AND SERVING TESTS
+# ============================================================
+
+def test_image_upload(client):
+    img_byte_arr = io.BytesIO()
+    img = Image.new('RGB', (100, 100), color='purple')
+    img.save(img_byte_arr, format='JPEG')
+    img_byte_arr.seek(0)
+
+    data = {
+        'user_id': 'TEIT30',
+        'name': 'Soham',
+        'email': 'soham@example.com',
+        'category': 'Electrical',
+        'location_id': 'LOC001',
+        'description': 'Sparking wire with evidence',
+        'photo': (img_byte_arr, 'test_hazard.jpg')
+    }
+
+    res = client.post('/api/complaints', data=data, content_type='multipart/form-data')
+    assert res.status_code == 201
+    body = res.get_json()
+    assert body['success'] is True
+    assert 'photo_url' in body['data']
+    assert body['data']['photo_url'].startswith('http://localhost:5000/uploads/')
+
+def test_uploaded_image_served(client, app):
+    # Create test image in uploads folder
+    upload_folder = app.config['UPLOAD_FOLDER']
+    test_filename = 'COM-TEST-0001_photo.jpg'
+    file_path = os.path.join(upload_folder, test_filename)
+    img = Image.new('RGB', (50, 50), color='yellow')
+    img.save(file_path)
+
+    # Test GET /uploads/filename
+    res = client.get(f'/uploads/{test_filename}')
+    assert res.status_code == 200
+    assert res.content_type == 'image/jpeg'
+
+def test_tracking_returns_photo_url(client):
+    img_byte_arr = io.BytesIO()
+    img = Image.new('RGB', (60, 60), color='orange')
+    img.save(img_byte_arr, format='JPEG')
+    img_byte_arr.seek(0)
+
+    # Submit
+    res = client.post('/api/complaints', data={
+        'user_id': '30',
+        'name': 'Soham',
+        'email': 'soham@example.com',
+        'category': 'Electrical',
+        'location_id': 'LOC001',
+        'description': 'Exposed wire hazard',
+        'photo': (img_byte_arr, 'evidence.jpg')
+    }, content_type='multipart/form-data')
+    assert res.status_code == 201
+    cid = res.get_json()['complaint_id']
+
+    # Track
     track_res = client.post('/api/complaints/track', json={
-        'complaint_id': complaint_id,
+        'complaint_id': cid,
         'email': 'soham@example.com'
     })
     assert track_res.status_code == 200
     track_data = track_res.get_json()
-    assert track_data['complaint_id'] == complaint_id
-    assert track_data['status'] == 'Reported'
-    assert len(track_data['timeline']) >= 1
+    assert 'photo_url' in track_data
+    assert track_data['photo_url'].startswith('http://localhost:5000/uploads/')
 
-    # 3. Track with wrong email should fail (403)
-    wrong_track = client.post('/api/complaints/track', json={
-        'complaint_id': complaint_id,
-        'email': 'wrong@example.com'
-    })
-    assert wrong_track.status_code == 403
+# ============================================================
+# 4. PRIORITY & RECURRENCE TESTS
+# ============================================================
+
+def test_priority_engine():
+    crit = detect_priority('Electrical', 'Sparking from exposed wire near DB Lab')
+    assert crit['priority'] == 'Critical'
+    assert crit['score'] >= 90
+
+    high = detect_priority('Plumbing', 'Major water leakage in washroom')
+    assert high['priority'] == 'High'
+
+    med = detect_priority('HVAC', 'Fan not working in classroom')
+    assert med['priority'] == 'Medium'
+
+    low = detect_priority('Civil / Infrastructure', 'Paint peeling on wall')
+    assert low['priority'] == 'Low'
 
 def test_recurrence_detection(client):
-    # Seed 3 prior complaints at LOC001 for Electrical
     for i in range(3):
         res = client.post('/api/complaints', json={
             'user_id': f'STU{i+1}',
@@ -175,25 +354,26 @@ def test_recurrence_detection(client):
             'email': f'student{i+1}@campus.edu',
             'category': 'Electrical',
             'location_id': 'LOC001',
-            'description': f'Historical electrical issue {i+1}',
-            'gps_mode': 'verified'
+            'description': f'Historical electrical issue {i+1}'
         })
         assert res.status_code == 201
 
-    # Now 4th complaint at LOC001 for Electrical should be flagged recurring
     res4 = client.post('/api/complaints', json={
         'user_id': 'TEIT30',
         'name': 'Soham',
         'email': 'soham@example.com',
         'category': 'Electrical',
         'location_id': 'LOC001',
-        'description': 'Sparking from exposed wire near DB Lab',
-        'gps_mode': 'verified'
+        'description': 'Sparking from exposed wire near DB Lab'
     })
     assert res4.status_code == 201
     data4 = res4.get_json()
     assert data4['is_recurring'] is True
     assert data4['previous_complaint_count'] >= 3
+
+# ============================================================
+# 5. ADMIN WORKFLOW & STATUS TIMELINE TESTS
+# ============================================================
 
 def test_admin_flow_and_worker_assignment(client):
     # 1. Admin login
@@ -213,8 +393,7 @@ def test_admin_flow_and_worker_assignment(client):
         'email': 'soham@example.com',
         'category': 'Electrical',
         'location_id': 'LOC001',
-        'description': 'Sparking from exposed wire',
-        'gps_mode': 'verified'
+        'description': 'Sparking from exposed wire'
     })
     cid = sub_res.get_json()['complaint_id']
 

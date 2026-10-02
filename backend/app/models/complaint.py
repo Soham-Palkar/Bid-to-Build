@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from ..extensions import db
 
@@ -19,7 +20,10 @@ class Complaint(db.Model):
 
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
+    altitude_m = db.Column(db.Float, nullable=True)
     location_verified = db.Column(db.Boolean, default=False, nullable=False)
+    gps_distance_m = db.Column(db.Float, nullable=True)
+    gps_radius_m = db.Column(db.Float, default=5.0, nullable=False)
 
     priority = db.Column(db.String(32), default='Medium', nullable=False)
     priority_score = db.Column(db.Integer, default=50, nullable=False)
@@ -52,13 +56,16 @@ class Complaint(db.Model):
     )
 
     def to_dict(self):
-        # Format photo URL
+        # Format photo URL to point directly to backend uploads endpoint
         photo_url = None
-        if self.photo_path:
+        if self.photo_filename:
+            photo_url = f"http://localhost:5000/uploads/{self.photo_filename}"
+        elif self.photo_path:
             if self.photo_path.startswith(('http://', 'https://', 'data:')):
                 photo_url = self.photo_path
             else:
-                photo_url = f"/uploads/{self.photo_filename}" if self.photo_filename else f"/{self.photo_path}"
+                fname = os.path.basename(self.photo_path)
+                photo_url = f"http://localhost:5000/uploads/{fname}"
 
         loc = self.location
         user = self.user
@@ -73,8 +80,24 @@ class Complaint(db.Model):
             'name': loc.location_name if loc else 'Campus Location',
             'latitude': self.latitude,
             'longitude': self.longitude,
+            'altitude_m': self.altitude_m,
             'verified': self.location_verified,
+            'distance_m': self.gps_distance_m,
+            'radius_m': self.gps_radius_m,
             'location_id': self.location_id
+        }
+
+        # Structured GPS metadata block
+        has_gps = self.latitude is not None and self.longitude is not None
+        gps_info = {
+            "available": has_gps,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "altitude_m": self.altitude_m,
+            "distance_m": self.gps_distance_m,
+            "radius_m": self.gps_radius_m,
+            "verified": self.location_verified,
+            "detected_location_id": self.detected_location_id
         }
 
         # Format timeline from status history
@@ -102,6 +125,7 @@ class Complaint(db.Model):
             },
             'location': location_details,
             'location_id': self.location_id,
+            'gps': gps_info,
             'priority': self.priority,
             'priority_score': self.priority_score,
             'priority_reason': self.priority_reason or 'Automated safety assessment',

@@ -47,6 +47,9 @@ export interface Location {
   location_id?: string;
   latitude?: number;
   longitude?: number;
+  altitude_m?: number | null;
+  distance_m?: number | null;
+  radius_m?: number;
   detected_building?: string;
   detected_floor?: string;
   detected_room?: string;

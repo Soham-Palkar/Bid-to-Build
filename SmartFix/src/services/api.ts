@@ -53,7 +53,21 @@ export interface CreateComplaintPayload {
   photo_data_url?: string;
   photo_filename?: string;
   photo_size?: string;
-  gps_mode?: 'verified' | 'mismatch' | 'none';
+  latitude?: number | null;
+  longitude?: number | null;
+  altitude_m?: number | null;
+}
+
+export function getUploadUrl(photoPathOrUrl?: string | null): string {
+  if (!photoPathOrUrl) return '';
+  if (photoPathOrUrl.startsWith('http://') || photoPathOrUrl.startsWith('https://') || photoPathOrUrl.startsWith('data:')) {
+    return photoPathOrUrl;
+  }
+  const cleaned = photoPathOrUrl.replace(/^\/+/, '');
+  if (cleaned.startsWith('uploads/')) {
+    return `http://localhost:5000/${cleaned}`;
+  }
+  return `http://localhost:5000/uploads/${cleaned}`;
 }
 
 export async function getLocations(): Promise<CampusLocation[]> {
@@ -63,18 +77,37 @@ export async function getLocations(): Promise<CampusLocation[]> {
 
 export async function detectPhotoLocation(params: {
   location_id: string;
-  gps_mode: 'verified' | 'mismatch' | 'none';
+  photo?: File | null;
+  photo_data_url?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  altitude_m?: number | null;
 }): Promise<{
   has_gps: boolean;
-  latitude?: number;
-  longitude?: number;
+  gps_available?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  altitude_m?: number | null;
+  distance_m?: number | null;
+  allowed_radius_m?: number;
   user_selected: string;
+  location_id?: string;
+  detected_location_id?: string;
   detected_building?: string;
   detected_floor?: string;
   detected_room?: string;
   detected_name?: string | null;
   verified: boolean;
 }> {
+  if (params.photo) {
+    const formData = new FormData();
+    formData.append('location_id', params.location_id);
+    formData.append('photo', params.photo);
+    const { data } = await apiClient.post('/complaints/detect-location', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  }
   const { data } = await apiClient.post('/complaints/detect-location', params);
   return data;
 }
@@ -92,9 +125,6 @@ export async function createComplaint(
     formData.append('location_id', payload.location_id);
     formData.append('description', payload.description);
     formData.append('photo', payload.photo);
-    if (payload.gps_mode) {
-      formData.append('gps_mode', payload.gps_mode);
-    }
 
     const { data } = await apiClient.post<CreateComplaintResponse>('/complaints', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -112,7 +142,6 @@ export async function createComplaint(
     photo_data_url: payload.photo_data_url,
     photo_filename: payload.photo_filename,
     photo_size: payload.photo_size,
-    gps_mode: payload.gps_mode || 'verified',
   });
   return data;
 }

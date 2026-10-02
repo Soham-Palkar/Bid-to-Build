@@ -179,6 +179,28 @@ def get_workers():
     workers = Worker.query.order_by(Worker.id.asc()).all()
     return jsonify([w.to_dict() for w in workers]), 200
 
+@admin_bp.route('/workers/<int:worker_id>', methods=['PATCH', 'PUT'])
+def update_worker(worker_id: int):
+    """
+    Updates worker contact information (e.g. real email address or phone).
+    """
+    worker = Worker.query.get(worker_id)
+    if not worker:
+        return jsonify({"success": False, "error": "Worker not found."}), 404
+
+    data = request.get_json(silent=True) or request.form.to_dict()
+    if 'email' in data and data['email']:
+        worker.email = str(data['email']).strip()
+    if 'phone' in data and data['phone']:
+        worker.phone = str(data['phone']).strip()
+    if 'name' in data and data['name']:
+        worker.name = str(data['name']).strip()
+    if 'specialization' in data and data['specialization']:
+        worker.specialization = str(data['specialization']).strip()
+
+    db.session.commit()
+    return jsonify({"success": True, "worker": worker.to_dict()}), 200
+
 @admin_bp.route('/complaints/<complaint_id>/assign', methods=['POST'])
 def assign_worker(complaint_id: str):
     """

@@ -27,6 +27,7 @@ import {
   getWorkers,
   assignWorkerToComplaint,
   updateComplaintStatus,
+  getUploadUrl,
 } from '../services/api';
 import type { Complaint, ComplaintStatus, Worker } from '../types';
 
@@ -350,7 +351,7 @@ export const ComplaintDetails: React.FC = () => {
               <div className="relative bg-[#0F172A] aspect-video w-full overflow-hidden">
                 {complaint.photo_url && !imgFallback ? (
                   <img
-                    src={complaint.photo_url}
+                    src={getUploadUrl(complaint.photo_url)}
                     alt={`Maintenance issue evidence for ${complaint.complaint_id}`}
                     referrerPolicy="no-referrer"
                     onError={() => setImgFallback(true)}
@@ -372,8 +373,11 @@ export const ComplaintDetails: React.FC = () => {
                   <span className="font-semibold text-[#475569]">GPS:</span>
                   {hasGps ? (
                     <span className="font-mono-tech font-semibold text-[#0F172A]">
-                      {complaint.location.latitude?.toFixed(5)},{' '}
-                      {complaint.location.longitude?.toFixed(5)}
+                      {complaint.location.latitude?.toFixed(6)},{' '}
+                      {complaint.location.longitude?.toFixed(6)}
+                      {complaint.location.altitude_m !== null && complaint.location.altitude_m !== undefined && (
+                        <span className="text-[#64748B] font-normal"> · Alt: {complaint.location.altitude_m.toFixed(1)}m</span>
+                      )}
                     </span>
                   ) : (
                     <span className="font-mono-tech text-[#64748B]">Not available</span>
@@ -385,7 +389,7 @@ export const ComplaintDetails: React.FC = () => {
                   {hasGps ? (
                     <span className="inline-flex items-center gap-1 font-semibold text-[#047857]">
                       <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
-                      <span>✓ Detected</span>
+                      <span>{complaint.location.verified ? '✓ Location Verified' : '⚠ GPS Mismatch'}</span>
                     </span>
                   ) : (
                     <span className="text-[#64748B]">Not available</span>
@@ -440,12 +444,17 @@ export const ComplaintDetails: React.FC = () => {
               userBuilding={complaint.location.building}
               userFloor={complaint.location.floor}
               userRoom={complaint.location.room}
+              userLocationName={complaint.location.name}
+              userLocationId={complaint.location.location_id || complaint.location_id}
               hasGps={hasGps}
               detectedBuilding={complaint.location.detected_building}
               detectedFloor={complaint.location.detected_floor}
               detectedRoom={complaint.location.detected_room}
               latitude={complaint.location.latitude}
               longitude={complaint.location.longitude}
+              altitude_m={complaint.location.altitude_m}
+              distance_m={complaint.location.distance_m}
+              radius_m={complaint.location.radius_m || 5}
               verified={complaint.location.verified}
             />
 

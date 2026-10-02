@@ -45,13 +45,10 @@ def send_complaint_confirmation_email(complaint, user, location=None) -> tuple[b
     Dispatches a confirmation email to the student upon successful complaint registration.
     """
     loc_name = location.location_name if location else (complaint.location.location_name if complaint.location else 'Campus Facility')
-    loc_str = f"{loc_name} ({location.building if location else 'XIE'}, Floor {location.floor if location else '1'} • {location.room if location else ''})"
 
-    subject = f"SmartFix Complaint Registered — {complaint.complaint_id}"
+    subject = f"SmartFix Complaint Confirmation — {complaint.complaint_id}"
 
-    body = f"""Hello {user.name},
-
-Your maintenance complaint has been successfully registered.
+    body = f"""SmartFix Complaint Confirmation
 
 Problem ID: {complaint.complaint_id}
 
@@ -64,12 +61,10 @@ Description:
 {complaint.description}
 
 You can track your complaint using:
+Problem ID + registered email.
 
-Problem ID:
-{complaint.complaint_id}
-
-Email:
-{user.email}
+Problem ID: {complaint.complaint_id}
+Email: {user.email}
 
 Thank you,
 SmartFix Maintenance System
@@ -82,20 +77,25 @@ def send_worker_assignment_email(complaint, worker, location=None) -> tuple[bool
     """
     loc_name = location.location_name if location else (complaint.location.location_name if complaint.location else 'Campus Facility')
 
-    subject = f"New Maintenance Complaint Assigned — {complaint.complaint_id}"
+    subject = f"SmartFix Maintenance Assignment — {complaint.complaint_id}"
 
-    body = f"""You have been assigned a new maintenance complaint.
+    body = f"""SmartFix Maintenance Assignment
 
 Problem ID: {complaint.complaint_id}
+
 Category: {complaint.category}
 Priority: {complaint.priority}
-Location: {loc_name}
+
+Location:
+{loc_name}
 
 Description:
 {complaint.description}
 
-Status:
+Current Status:
 {complaint.status}
+
+Please inspect and resolve the reported issue.
 
 SmartFix Maintenance System
 """

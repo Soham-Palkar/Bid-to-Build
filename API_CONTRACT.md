@@ -46,7 +46,7 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
       "location_name": "First Floor DB Lab",
       "latitude": 19.045266,
       "longitude": 72.841845,
-      "radius_m": 20.0
+      "radius_m": 5.0
     },
     {
       "id": 2,
@@ -57,7 +57,7 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
       "location_name": "First Floor CC Lab",
       "latitude": 19.045009,
       "longitude": 72.842012,
-      "radius_m": 20.0
+      "radius_m": 5.0
     },
     {
       "id": 3,
@@ -68,7 +68,7 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
       "location_name": "First Floor Software Lab",
       "latitude": 19.045220,
       "longitude": 72.841860,
-      "radius_m": 20.0
+      "radius_m": 5.0
     },
     {
       "id": 4,
@@ -79,7 +79,7 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
       "location_name": "First Floor Men's Washroom",
       "latitude": 19.045216,
       "longitude": 72.841769,
-      "radius_m": 20.0
+      "radius_m": 5.0
     }
   ]
 }
@@ -99,8 +99,8 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
   - `category` (string, required) — `"Electrical"` | `"Plumbing"` | `"Furniture"` | `"HVAC"` | `"Civil / Infrastructure"` | `"Other"`
   - `location_id` (string, required) — Canonical location ID (e.g. `"LOC001"`)
   - `description` (string, required) — Problem description
-  - `photo` (binary file, optional) — Incident photo evidence
-  - `gps_mode` (string, optional) — `"verified"` | `"mismatch"` | `"none"`
+  - `photo` (binary file, optional) — Incident photo evidence (JPG, PNG, WEBP $\le$ 5MB)
+  - `photo_data_url` (string, optional) — Base64 encoded snapshot or sample image path
 - **Success Response (`201 Created`):**
 ```json
 {
@@ -117,6 +117,9 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
     "location_id": "LOC001",
     "latitude": 19.045266,
     "longitude": 72.841845,
+    "altitude_m": 12.4,
+    "distance_m": 0.0,
+    "radius_m": 5.0,
     "verified": true
   },
   "is_recurring": true,
@@ -126,7 +129,20 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
   "user_email_recipient": "soham@example.com",
   "email_sent_at": "02 Oct 2026, 01:15 PM",
   "email_subject": "SmartFix Complaint Registered — COM-2026-0001",
-  "message": "Complaint registered successfully. Confirmation email sent."
+  "message": "Complaint registered successfully. Confirmation email sent.",
+  "data": {
+    "complaint_id": "COM-2026-0001",
+    "photo_url": "http://localhost:5000/uploads/COM-2026-0001_a1b2c3d4.jpg",
+    "gps": {
+      "available": true,
+      "latitude": 19.045266,
+      "longitude": 72.841845,
+      "altitude_m": 12.4,
+      "distance_m": 0.0,
+      "radius_m": 5.0,
+      "verified": true
+    }
+  }
 }
 ```
 
@@ -151,16 +167,20 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
   "complaint_id": "COM-2026-0001",
   "category": "Electrical",
   "description": "Sparking from exposed wire near DB Lab switchboard.",
+  "photo_url": "http://localhost:5000/uploads/COM-2026-0001_a1b2c3d4.jpg",
   "location": "First Floor DB Lab — Xavier Institute of Engineering, Floor 1 • DB Lab",
   "location_details": {
     "building": "Xavier Institute of Engineering",
     "floor": "Floor 1",
     "room": "DB Lab",
     "name": "First Floor DB Lab",
+    "location_id": "LOC001",
     "latitude": 19.045266,
     "longitude": 72.841845,
-    "verified": true,
-    "location_id": "LOC001"
+    "altitude_m": 12.4,
+    "distance_m": 0.0,
+    "radius_m": 5.0,
+    "verified": true
   },
   "priority": "Critical",
   "priority_reason": "Safety hazard detected (sparking, exposed wire)",
@@ -171,7 +191,7 @@ Authoritative specification for SmartFix backend APIs serving Campus Maintenance
     "id": 1,
     "name": "Raj Patil",
     "specialization": "Electrical",
-    "email": "raj.patil@campus.edu",
+    "email": "202403047.sohamgpp@student.xavier.ac.in",
     "phone": "+91 98200 11223"
   },
   "timeline": [

@@ -16,7 +16,7 @@ import { PublicNavbar, PublicFooter } from '../components/Navbar';
 import { PriorityBadge } from '../components/PriorityBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { ComplaintTimeline } from '../components/ComplaintTimeline';
-import { trackComplaint } from '../services/api';
+import { trackComplaint, getUploadUrl } from '../services/api';
 import { getInitials } from '../utils/formatters';
 import type { TrackComplaintResponse } from '../types';
 
@@ -300,7 +300,7 @@ export const TrackComplaint: React.FC = () => {
                     <div className="relative rounded-lg overflow-hidden border border-[#E2E8F0] bg-[#0F172A] aspect-video max-h-56">
                       {!imgFallback ? (
                         <img
-                          src={result.photo_url}
+                          src={getUploadUrl(result.photo_url)}
                           alt={`Evidence photo for ${result.complaint_id}`}
                           referrerPolicy="no-referrer"
                           onError={() => setImgFallback(true)}

@@ -13,12 +13,19 @@ import {
 } from 'lucide-react';
 import { formatFileSize } from '../utils/formatters';
 
+import electricalImg from '../assets/images/incident_electrical_spark_1790921884186.jpg';
+import plumbingImg from '../assets/images/incident_plumbing_leak_1790921897370.jpg';
+import hvacImg from '../assets/images/incident_hvac_vent_1790921909791.jpg';
+
 export interface UploadedPhotoState {
   file: File | null;
   previewUrl: string;
   filename: string;
   sizeLabel: string;
-  gpsMode: 'verified' | 'mismatch' | 'none';
+  latitude?: number | null;
+  longitude?: number | null;
+  altitude_m?: number | null;
+  gpsAvailable?: boolean;
   captureSource?: 'camera' | 'upload' | 'sample';
 }
 
@@ -29,21 +36,33 @@ interface PhotoUploaderProps {
   error?: string;
 }
 
-const SAMPLE_PHOTOS: Record<string, { url: string; name: string; size: string }> = {
+const SAMPLE_PHOTOS: Record<
+  string,
+  { url: string; name: string; size: string; latitude: number; longitude: number; altitude_m: number }
+> = {
   Electrical: {
-    url: '/src/assets/images/incident_electrical_spark_1790921884186.jpg',
+    url: electricalImg,
     name: 'wire_switchboard_hazard.jpg',
     size: '2.4 MB',
+    latitude: 19.045266,
+    longitude: 72.841845,
+    altitude_m: 12.4,
   },
   Plumbing: {
-    url: '/src/assets/images/incident_plumbing_leak_1790921897370.jpg',
+    url: plumbingImg,
     name: 'valve_pipe_leak_r101.jpg',
     size: '1.8 MB',
+    latitude: 19.045216,
+    longitude: 72.841769,
+    altitude_m: 11.8,
   },
   default: {
-    url: '/src/assets/images/incident_hvac_vent_1790921909791.jpg',
+    url: hvacImg,
     name: 'campus_maintenance_evidence.jpg',
     size: '2.1 MB',
+    latitude: 19.045220,
+    longitude: 72.841860,
+    altitude_m: 13.0,
   },
 };
 
@@ -169,7 +188,10 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
           previewUrl: dataUrl,
           filename,
           sizeLabel: file ? formatFileSize(file.size) : '1.4 MB',
-          gpsMode: 'verified',
+          latitude: 19.045266,
+          longitude: 72.841845,
+          altitude_m: 12.4,
+          gpsAvailable: true,
           captureSource: 'camera',
         });
         handleCloseCamera();
@@ -196,19 +218,12 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = typeof reader.result === 'string' ? reader.result : '';
-      const lower = file.name.toLowerCase();
-      const gpsMode: 'verified' | 'mismatch' | 'none' = lower.includes('nogps')
-        ? 'none'
-        : lower.includes('mismatch')
-        ? 'mismatch'
-        : 'verified';
 
       onChange({
         file,
         previewUrl: dataUrl,
         filename: file.name,
         sizeLabel: formatFileSize(file.size),
-        gpsMode,
         captureSource: source,
       });
       if (isCameraOpen) {
@@ -238,18 +253,42 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
     }
   };
 
-  const handleUseSamplePhoto = (mode: 'verified' | 'mismatch' | 'none' = 'verified') => {
+  useEffect(() => {
+    setImgFallback(false);
+  }, [value?.previewUrl]);
+
+  const handleUseSamplePhoto = async () => {
     setUploadError(null);
     setImgFallback(false);
     const sample = SAMPLE_PHOTOS[category] || SAMPLE_PHOTOS.default;
-    onChange({
-      file: null,
-      previewUrl: sample.url,
-      filename: sample.name,
-      sizeLabel: sample.size,
-      gpsMode: mode,
-      captureSource: 'sample',
-    });
+    try {
+      const response = await fetch(sample.url);
+      const blob = await response.blob();
+      const file = new File([blob], sample.name, { type: 'image/jpeg' });
+      onChange({
+        file,
+        previewUrl: sample.url,
+        filename: sample.name,
+        sizeLabel: sample.size,
+        latitude: sample.latitude,
+        longitude: sample.longitude,
+        altitude_m: sample.altitude_m,
+        gpsAvailable: true,
+        captureSource: 'sample',
+      });
+    } catch {
+      onChange({
+        file: null,
+        previewUrl: sample.url,
+        filename: sample.name,
+        sizeLabel: sample.size,
+        latitude: sample.latitude,
+        longitude: sample.longitude,
+        altitude_m: sample.altitude_m,
+        gpsAvailable: true,
+        captureSource: 'sample',
+      });
+    }
   };
 
   return (
@@ -260,7 +299,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
         </label>
         <button
           type="button"
-          onClick={() => handleUseSamplePhoto('verified')}
+          onClick={() => handleUseSamplePhoto()}
           className="inline-flex items-center gap-1.5 text-xs font-medium text-[#2563EB] hover:text-[#1D4ED8] transition-colors cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5" />
@@ -338,7 +377,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    handleUseSamplePhoto('verified');
+                    handleUseSamplePhoto();
                     handleCloseCamera();
                   }}
                   className="px-3.5 py-2 rounded bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
@@ -475,20 +514,36 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
                 </span>
               </div>
 
-              {/* EXIF GPS Status Indicator (Section 13) */}
-              {value.gpsMode !== 'none' ? (
-                <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#0284C7] mt-0.5">
-                  <MapPin className="w-3.5 h-3.5 shrink-0" />
-                  <span>📍 Location data detected (GPS: 19.12345° N, 72.87654° E)</span>
+              {/* EXIF GPS Telemetry Readout */}
+              {value.gpsAvailable !== false && (value.latitude !== null && value.latitude !== undefined) ? (
+                <div className="flex flex-col gap-1 p-2 rounded bg-[#F0F9FF] border border-[#BAE6FD] mt-1">
+                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0369A1]">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 text-[#0284C7]" />
+                    <span>✓ EXIF GPS Detected</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px] font-mono-tech text-[#334155] pt-0.5">
+                    <div>
+                      <span className="text-[#64748B] block text-[10px]">Latitude</span>
+                      <strong>{value.latitude.toFixed(6)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B] block text-[10px]">Longitude</span>
+                      <strong>{value.longitude?.toFixed(6)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B] block text-[10px]">Altitude</span>
+                      <strong>{value.altitude_m !== null && value.altitude_m !== undefined ? `${value.altitude_m.toFixed(1)} m` : '—'}</strong>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#D97706] mt-0.5">
+                <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#D97706] p-2 rounded bg-[#FFFBEB] border border-[#FDE68A] mt-1">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span>⚠ Location data not found (Manual location will be used)</span>
+                  <span>⚠ No EXIF GPS metadata detected (Manual location selection will be used)</span>
                 </div>
               )}
 
-              {/* Retake / Replace & EXIF GPS Controls */}
+              {/* Retake / Replace Controls */}
               <div className="flex flex-wrap items-center gap-2 pt-1.5">
                 <button
                   type="button"
@@ -506,43 +561,6 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
                 >
                   <Upload className="w-3 h-3" />
                   <span>Replace from Device</span>
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-[11px] text-[#64748B]">EXIF GPS State:</span>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, gpsMode: 'verified' })}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    value.gpsMode === 'verified'
-                      ? 'bg-[#2563EB] text-white'
-                      : 'bg-white border border-[#CBD5E1] text-[#475569] hover:text-[#0F172A]'
-                  }`}
-                >
-                  GPS Match
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, gpsMode: 'mismatch' })}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    value.gpsMode === 'mismatch'
-                      ? 'bg-[#D97706] text-white'
-                      : 'bg-white border border-[#CBD5E1] text-[#475569] hover:text-[#0F172A]'
-                  }`}
-                >
-                  GPS Mismatch
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, gpsMode: 'none' })}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    value.gpsMode === 'none'
-                      ? 'bg-[#475569] text-white'
-                      : 'bg-white border border-[#CBD5E1] text-[#475569] hover:text-[#0F172A]'
-                  }`}
-                >
-                  No GPS Data
                 </button>
               </div>
             </div>

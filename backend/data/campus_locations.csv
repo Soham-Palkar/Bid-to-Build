@@ -1,5 +1,5 @@
 location_id,building,floor,room,location_name,latitude,longitude,radius_m
-LOC001,Xavier Institute of Engineering,1,DB Lab,First Floor DB Lab,19.045266,72.841845,20
-LOC002,Xavier Institute of Engineering,1,CC Lab,First Floor CC Lab,19.045009,72.842012,20
-LOC003,Xavier Institute of Engineering,1,Software Lab,First Floor Software Lab,19.045220,72.841860,20
-LOC004,Xavier Institute of Engineering,1,Men's Washroom,First Floor Men's Washroom,19.045216,72.841769,20
+LOC001,Xavier Institute of Engineering,1,DB Lab,First Floor DB Lab,19.045266,72.841845,5
+LOC002,Xavier Institute of Engineering,1,CC Lab,First Floor CC Lab,19.045009,72.842012,5
+LOC003,Xavier Institute of Engineering,1,Software Lab,First Floor Software Lab,19.045220,72.841860,5
+LOC004,Xavier Institute of Engineering,1,Men's Washroom,First Floor Men's Washroom,19.045216,72.841769,5

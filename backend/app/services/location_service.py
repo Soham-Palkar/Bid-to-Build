@@ -3,7 +3,7 @@ from ..models.location import Location
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
-    Computes great-circle distance between two GPS points in meters using Haversine formula.
+    Computes great-circle horizontal distance between two GPS points in meters using Haversine formula.
     """
     R = 6371000.0  # Earth radius in meters
 
@@ -18,24 +18,20 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
     return R * c
 
-def verify_complaint_location(selected_location_id: str, photo_lat: float | None, photo_lon: float | None) -> dict:
+def verify_complaint_location(
+    selected_location_id: str,
+    photo_lat: float | None,
+    photo_lon: float | None,
+    altitude_m: float | None = None
+) -> dict:
     """
     Verifies reported location against photo EXIF GPS.
-    The selected location is ALWAYS the primary reported location.
-    Returns:
-        {
-            "selected_location": Location object or dict,
-            "has_gps": bool,
-            "photo_latitude": float or None,
-            "photo_longitude": float or None,
-            "distance_m": float or None,
-            "verified": bool,
-            "detected_location": Location object or None,
-            "detected_location_id": str or None
-        }
+    The selected location is ALWAYS the primary authoritative location.
+    Verification rule: distance_m <= selected_location.radius_m (configured in database, e.g. 5m)
     """
     selected_loc = Location.query.filter_by(location_id=selected_location_id).first()
     all_locations = Location.query.all()
+    allowed_radius = selected_loc.radius_m if selected_loc else 5.0
 
     if photo_lat is None or photo_lon is None:
         return {
@@ -43,7 +39,9 @@ def verify_complaint_location(selected_location_id: str, photo_lat: float | None
             "has_gps": False,
             "photo_latitude": None,
             "photo_longitude": None,
+            "altitude_m": None,
             "distance_m": None,
+            "allowed_radius_m": allowed_radius,
             "verified": False,
             "detected_location": None,
             "detected_location_id": None
@@ -72,7 +70,10 @@ def verify_complaint_location(selected_location_id: str, photo_lat: float | None
         "has_gps": True,
         "photo_latitude": photo_lat,
         "photo_longitude": photo_lon,
+        "altitude_m": altitude_m,
+        "photo_altitude_m": altitude_m,
         "distance_m": round(distance_to_selected, 2),
+        "allowed_radius_m": allowed_radius,
         "verified": is_verified,
         "detected_location": nearest_loc,
         "detected_location_id": nearest_loc.location_id if nearest_loc else None
