@@ -1,0 +1,6 @@
+{
+  "name": "SmartFix — Campus Maintenance & Predictive Complaint Management",
+  "description": "Smart Maintenance & Predictive Complaint Management Platform (PS-07) with automated priority triage, EXIF GPS verification, recurring issue detection, and maintenance dispatch workflows.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
