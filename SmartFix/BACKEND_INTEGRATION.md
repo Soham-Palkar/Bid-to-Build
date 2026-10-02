@@ -1,6 +1,6 @@
 # SmartFix (PS-07) — Backend Integration Contract
 
-Base URL configured via `VITE_API_BASE_URL` (default `/api` or `http://localhost:5000/api`).
+Base URL configured via `VITE_API_BASE_URL` (default `http://localhost:5000/api`).
 
 ---
 
@@ -9,32 +9,42 @@ Base URL configured via `VITE_API_BASE_URL` (default `/api` or `http://localhost
 - **Authentication:** Public (None)
 - **Content-Type:** `multipart/form-data` or `application/json`
 - **Request Fields:**
-  - `user_id` (string, required) — Student or Staff ID (e.g. `TEIT30`)
+  - `user_id` (string, required) — Student or Staff ID (e.g. `30`)
   - `name` (string, required) — Reporter full name
   - `email` (string, required) — Reporter campus email
   - `category` (string, required) — `Electrical` | `Plumbing` | `Furniture` | `HVAC` | `Civil / Infrastructure` | `Other`
-  - `building` (string, required)
-  - `floor` (string, required)
-  - `room` (string, required)
+  - `location_id` (string, required) — Authoritative campus location (e.g. `LOC001`)
   - `description` (string, required)
-  - `photo` (File / base64, required)
+  - `photo` (File or base64 `photo_data_url`)
 - **Success Response (`201 Created`):**
 ```json
 {
   "success": true,
   "complaint_id": "COM-2026-0001",
   "priority": "Critical",
-  "priority_reason": "Electrical safety hazard detected.",
+  "priority_reason": "Severe electrical hazard keyword detected.",
   "location": {
-    "name": "Engineering Block — Lab 204",
-    "building": "Engineering Block",
-    "floor": "Floor 2",
-    "room": "Lab 204",
-    "verified": true
+    "name": "First Floor DB Lab",
+    "building": "Xavier Institute of Engineering",
+    "floor": "Floor 1",
+    "room": "DB Lab",
+    "location_id": "LOC001",
+    "verified": true,
+    "latitude": 19.045266,
+    "longitude": 72.841845,
+    "altitude_m": 12.4,
+    "distance_m": 0.0,
+    "radius_m": 5.0
   },
   "is_recurring": true,
   "previous_complaint_count": 3,
-  "status": "Reported"
+  "status": "Reported",
+  "user_email_sent": true,
+  "user_email_recipient": "student@example.com",
+  "data": {
+    "photo_url": "/uploads/COM-2026-0001_a1b2c3d4.jpg",
+    "photo_filename": "COM-2026-0001_a1b2c3d4.jpg"
+  }
 }
 ```
 - **Error Response (`400 Bad Request`):**

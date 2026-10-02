@@ -9,7 +9,12 @@ import type {
   Worker,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = RAW_API_BASE;
+
+export const API_ORIGIN = RAW_API_BASE.startsWith('http')
+  ? new URL(RAW_API_BASE).origin
+  : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -60,14 +65,19 @@ export interface CreateComplaintPayload {
 
 export function getUploadUrl(photoPathOrUrl?: string | null): string {
   if (!photoPathOrUrl) return '';
-  if (photoPathOrUrl.startsWith('http://') || photoPathOrUrl.startsWith('https://') || photoPathOrUrl.startsWith('data:')) {
+  if (
+    photoPathOrUrl.startsWith('http://') ||
+    photoPathOrUrl.startsWith('https://') ||
+    photoPathOrUrl.startsWith('data:') ||
+    photoPathOrUrl.startsWith('blob:')
+  ) {
     return photoPathOrUrl;
   }
   const cleaned = photoPathOrUrl.replace(/^\/+/, '');
   if (cleaned.startsWith('uploads/')) {
-    return `http://localhost:5000/${cleaned}`;
+    return `${API_ORIGIN}/${cleaned}`;
   }
-  return `http://localhost:5000/uploads/${cleaned}`;
+  return `${API_ORIGIN}/uploads/${cleaned}`;
 }
 
 export async function getLocations(): Promise<CampusLocation[]> {
@@ -212,6 +222,7 @@ export async function assignWorkerToComplaint(
   status: ComplaintStatus;
   worker: Worker;
   email_sent: boolean;
+  email_error?: string | null;
   complaint?: Complaint;
 }> {
   const { data } = await apiClient.post(

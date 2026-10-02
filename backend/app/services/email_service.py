@@ -9,18 +9,23 @@ def _send_email(to_email: str, subject: str, body_text: str) -> tuple[bool, str 
     """
     Internal helper to deliver an email via SMTP.
     Returns (success: bool, error_message: str | None).
+    Never reports success if SMTP delivery did not actually succeed.
     """
     if not to_email:
+        logger.warning("[EMAIL ERROR] Recipient email is missing.")
         return False, "Recipient email is missing."
 
-    # If SMTP credentials are not configured, log simulation and return gracefully
+    # If SMTP credentials are not configured, return False with a clear error
     if not Config.SMTP_USERNAME or not Config.SMTP_PASSWORD:
-        logger.info(
-            f"[EMAIL SIMULATION] SMTP not configured. Simulated dispatch to {to_email}:\n"
-            f"Subject: {subject}\n{body_text}"
-        )
-        return True, "Simulated dispatch (SMTP credentials not provided)."
+        logger.warning(f"[EMAIL ERROR] SMTP credentials not configured. Cannot send email to {to_email}.")
+        return False, "SMTP credentials are not configured on the server."
 
+    logger.info(f"[EMAIL] Preparing SMTP delivery")
+    logger.info(f"[EMAIL] SMTP host: {Config.SMTP_HOST}:{Config.SMTP_PORT}")
+    logger.info(f"[EMAIL] SMTP username: {Config.SMTP_USERNAME}")
+    logger.info(f"[EMAIL] Recipient: {to_email}")
+
+    server = None
     try:
         msg = EmailMessage()
         msg['Subject'] = subject
@@ -28,17 +33,28 @@ def _send_email(to_email: str, subject: str, body_text: str) -> tuple[bool, str 
         msg['To'] = to_email
         msg.set_content(body_text)
 
-        with smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT, timeout=10) as server:
-            server.starttls()
-            server.login(Config.SMTP_USERNAME, Config.SMTP_PASSWORD)
-            server.send_message(msg)
-
-        logger.info(f"Email successfully delivered to {to_email}")
+        logger.info("[EMAIL] Connecting to SMTP server...")
+        server = smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT, timeout=10)
+        server.ehlo()
+        logger.info("[EMAIL] STARTTLS...")
+        server.starttls()
+        server.ehlo()
+        logger.info("[EMAIL] Authenticating...")
+        server.login(Config.SMTP_USERNAME, Config.SMTP_PASSWORD)
+        logger.info("[EMAIL] Sending message...")
+        server.send_message(msg)
+        logger.info(f"[EMAIL] Message accepted by SMTP server for {to_email}.")
         return True, None
     except Exception as e:
         err_msg = str(e)
-        logger.warning(f"Failed to deliver email to {to_email}: {err_msg}")
+        logger.error(f"[EMAIL ERROR] SMTP delivery failed for {to_email}: {err_msg}")
         return False, err_msg
+    finally:
+        if server is not None:
+            try:
+                server.quit()
+            except Exception:
+                pass
 
 def send_complaint_confirmation_email(complaint, user, location=None) -> tuple[bool, str | None]:
     """

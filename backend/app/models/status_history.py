@@ -14,6 +14,25 @@ class StatusHistory(db.Model):
 
     complaint = db.relationship('Complaint', back_populates='timeline_entries')
 
+    def __init__(
+        self,
+        complaint_id: str,
+        new_status: str,
+        old_status: str | None = None,
+        changed_by: str = 'System',
+        notes: str | None = None,
+        id: int | None = None,
+        created_at: datetime | None = None
+    ):
+        if id is not None:
+            self.id = id
+        self.complaint_id = complaint_id
+        self.new_status = new_status
+        self.old_status = old_status
+        self.changed_by = changed_by
+        self.notes = notes
+        self.created_at = created_at or datetime.utcnow()
+
     def to_dict(self):
         return {
             'id': self.id,

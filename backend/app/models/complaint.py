@@ -55,17 +55,78 @@ class Complaint(db.Model):
         lazy='joined'
     )
 
+    def __init__(
+        self,
+        complaint_id: str,
+        user_id: int,
+        category: str,
+        description: str,
+        location_id: str,
+        photo_path: str | None = None,
+        photo_filename: str | None = None,
+        photo_size: str | None = None,
+        detected_location_id: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
+        altitude_m: float | None = None,
+        location_verified: bool = False,
+        gps_distance_m: float | None = None,
+        gps_radius_m: float = 5.0,
+        priority: str = 'Medium',
+        priority_score: int = 50,
+        priority_reason: str | None = None,
+        detected_keywords: str | None = None,
+        is_recurring: bool = False,
+        previous_complaint_count: int = 0,
+        assigned_worker_id: int | None = None,
+        status: str = 'Reported',
+        confirmation_email_sent: bool = False,
+        confirmation_email_error: str | None = None,
+        id: int | None = None,
+        created_at: datetime | None = None,
+        updated_at: datetime | None = None
+    ):
+        if id is not None:
+            self.id = id
+        self.complaint_id = complaint_id
+        self.user_id = user_id
+        self.category = category
+        self.description = description
+        self.location_id = location_id
+        self.photo_path = photo_path
+        self.photo_filename = photo_filename
+        self.photo_size = photo_size
+        self.detected_location_id = detected_location_id
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude_m = altitude_m
+        self.location_verified = location_verified
+        self.gps_distance_m = gps_distance_m
+        self.gps_radius_m = gps_radius_m
+        self.priority = priority
+        self.priority_score = priority_score
+        self.priority_reason = priority_reason
+        self.detected_keywords = detected_keywords
+        self.is_recurring = is_recurring
+        self.previous_complaint_count = previous_complaint_count
+        self.assigned_worker_id = assigned_worker_id
+        self.status = status
+        self.confirmation_email_sent = confirmation_email_sent
+        self.confirmation_email_error = confirmation_email_error
+        self.created_at = created_at or datetime.utcnow()
+        self.updated_at = updated_at or datetime.utcnow()
+
     def to_dict(self):
-        # Format photo URL to point directly to backend uploads endpoint
+        # Format photo URL cleanly as relative backend endpoint /uploads/<filename>
         photo_url = None
         if self.photo_filename:
-            photo_url = f"http://localhost:5000/uploads/{self.photo_filename}"
+            photo_url = f"/uploads/{self.photo_filename}"
         elif self.photo_path:
             if self.photo_path.startswith(('http://', 'https://', 'data:')):
                 photo_url = self.photo_path
             else:
                 fname = os.path.basename(self.photo_path)
-                photo_url = f"http://localhost:5000/uploads/{fname}"
+                photo_url = f"/uploads/{fname}"
 
         loc = self.location
         user = self.user

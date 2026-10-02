@@ -100,20 +100,31 @@ def create_complaint_pipeline(form_data: dict, photo_file=None) -> tuple[bool, d
         except Exception:
             saved_filename = form_data.get('photo_filename', f"{complaint_id}_evidence.jpg")
             saved_path = None
-    elif form_data.get('photo_data_url') and 'assets/images' in str(form_data.get('photo_data_url')):
-        # Copy frontend sample image to persistent uploads folder
+    elif form_data.get('photo_data_url') and not str(form_data.get('photo_data_url')).startswith('data:'):
+        # Copy frontend sample image or referenced asset to persistent uploads folder
         import shutil
-        sample_rel = str(form_data.get('photo_data_url')).lstrip('/')
-        # Look in workspace SmartFix/src/assets/images
-        possible_src = os.path.join(os.path.dirname(Config.UPLOAD_FOLDER), '..', 'SmartFix', sample_rel)
-        if not os.path.exists(possible_src):
-            possible_src = os.path.join(os.path.dirname(Config.UPLOAD_FOLDER), '..', 'SmartFix', 'src', 'assets', 'images', os.path.basename(sample_rel))
+        raw_url = str(form_data.get('photo_data_url')).split('?')[0].split('#')[0]
+        basename = os.path.basename(raw_url)
+        base_backend = os.path.dirname(Config.UPLOAD_FOLDER)
+        candidate_sources = [
+            os.path.join(Config.UPLOAD_FOLDER, basename),
+            os.path.join(base_backend, '..', 'SmartFix', 'src', 'assets', 'images', basename),
+            os.path.join(base_backend, '..', 'SmartFix', 'public', 'images', basename),
+            os.path.join(base_backend, '..', 'SmartFix', 'public', 'src', 'assets', 'images', basename),
+        ]
         
         saved_filename = f"{complaint_id}_{uuid.uuid4().hex[:8]}.jpg"
         saved_path = os.path.join(Config.UPLOAD_FOLDER, saved_filename)
-        if os.path.exists(possible_src):
-            shutil.copyfile(possible_src, saved_path)
-        else:
+        copied = False
+        for csrc in candidate_sources:
+            if os.path.exists(csrc) and csrc != saved_path:
+                shutil.copyfile(csrc, saved_path)
+                copied = True
+                break
+        if not copied and os.path.exists(os.path.join(Config.UPLOAD_FOLDER, basename)):
+            shutil.copyfile(os.path.join(Config.UPLOAD_FOLDER, basename), saved_path)
+            copied = True
+        if not copied:
             saved_filename = form_data.get('photo_filename', f"{complaint_id}_evidence.jpg")
 
     # 6. Extract EXIF GPS if available
@@ -268,8 +279,9 @@ def assign_worker_to_complaint(complaint_id: str, worker_id: int) -> tuple[bool,
         "status": "Assigned",
         "worker": worker.to_dict(),
         "email_sent": email_success,
+        "email_error": email_err,
         "complaint": complaint.to_dict(),
-        "message": f"Assigned to {worker.name}. Email {'dispatched' if email_success else 'failed to send'}."
+        "message": f"Assigned to {worker.name}. Email {'dispatched successfully' if email_success else f'notification failed: {email_err}'}."
     }, 200
 
 def update_status_pipeline(complaint_id: str, new_status: str, actor: str = 'Admin', notes: str | None = None) -> tuple[bool, dict, int]:

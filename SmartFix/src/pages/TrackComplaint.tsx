@@ -288,9 +288,17 @@ export const TrackComplaint: React.FC = () => {
                         Incident Evidence &amp; Location
                       </h3>
                     </div>
-                    {result.location_details?.verified && (
+                    {result.location_details?.verified ? (
                       <span className="font-mono-tech text-[11px] font-semibold text-[#047857]">
-                        ✓ GPS Matched ±2m
+                        ✓ GPS Matched ≤ {result.location_details?.radius_m || 5}m
+                      </span>
+                    ) : result.location_details?.latitude ? (
+                      <span className="font-mono-tech text-[11px] font-semibold text-[#D97706]">
+                        ⚠ GPS Mismatch ({result.location_details?.distance_m ? `${result.location_details.distance_m.toFixed(1)}m away` : 'Distance > 5m'})
+                      </span>
+                    ) : (
+                      <span className="font-mono-tech text-[11px] text-[#64748B]">
+                        Manual Campus Location
                       </span>
                     )}
                   </div>
@@ -303,20 +311,34 @@ export const TrackComplaint: React.FC = () => {
                           src={getUploadUrl(result.photo_url)}
                           alt={`Evidence photo for ${result.complaint_id}`}
                           referrerPolicy="no-referrer"
-                          onError={() => setImgFallback(true)}
+                          onError={() => {
+                            console.warn('Student tracking evidence image failed to load from:', getUploadUrl(result.photo_url));
+                            setImgFallback(true);
+                          }}
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-white/80 p-4">
+                        <div className="w-full h-full flex flex-col items-center justify-center text-white/80 p-4 text-center">
                           <ImageIcon className="w-8 h-8 mb-2 text-[#60A5FA]" />
-                          <span className="text-xs font-mono-tech">
-                            Incident Evidence Photo ({result.complaint_id})
+                          <span className="text-xs font-mono-tech text-slate-200">
+                            Incident Evidence Photo Unavailable ({result.complaint_id})
                           </span>
+                          {result.photo_url && (
+                            <span className="text-[10px] font-mono-tech text-slate-400 mt-1 max-w-sm truncate">
+                              URL: {getUploadUrl(result.photo_url)}
+                            </span>
+                          )}
                         </div>
                       )}
                       <div className="absolute bottom-2 left-2 right-2 bg-[#0F172A]/85 backdrop-blur-xs text-white px-3 py-1.5 rounded flex items-center justify-between font-mono-tech text-[11px]">
                         <span>REF: {result.complaint_id}</span>
-                        <span className="text-[#6EE7B7]">EXIF VERIFIED</span>
+                        {result.location_details?.verified && result.location_details?.latitude ? (
+                          <span className="text-[#6EE7B7]">✓ EXIF VERIFIED</span>
+                        ) : result.location_details?.latitude ? (
+                          <span className="text-[#FBBF24]">⚠ GPS MISMATCH</span>
+                        ) : (
+                          <span className="text-slate-300">NO EXIF GPS</span>
+                        )}
                       </div>
                     </div>
                   )}

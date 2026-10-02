@@ -11,6 +11,21 @@ class Admin(db.Model):
     name = db.Column(db.String(128), default='Campus Facilities Director')
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
+    def __init__(
+        self,
+        username: str,
+        name: str = 'Campus Facilities Director',
+        password_hash: str = '',
+        id: int | None = None,
+        created_at: datetime | None = None
+    ):
+        if id is not None:
+            self.id = id
+        self.username = username
+        self.name = name
+        self.password_hash = password_hash
+        self.created_at = created_at or datetime.utcnow()
+
     def set_password(self, password: str):
         self.password_hash = generate_password_hash(password)
 

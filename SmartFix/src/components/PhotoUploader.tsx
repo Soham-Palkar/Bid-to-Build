@@ -188,10 +188,10 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
           previewUrl: dataUrl,
           filename,
           sizeLabel: file ? formatFileSize(file.size) : '1.4 MB',
-          latitude: 19.045266,
-          longitude: 72.841845,
-          altitude_m: 12.4,
-          gpsAvailable: true,
+          latitude: null,
+          longitude: null,
+          altitude_m: null,
+          gpsAvailable: false,
           captureSource: 'camera',
         });
         handleCloseCamera();
@@ -357,9 +357,6 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
                   Initializing device camera...
                 </div>
               )}
-              <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-1 rounded font-mono-tech text-[10px] text-[#6EE7B7]">
-                GPS LOCK: 19.12345° N, 72.87654° E
-              </div>
             </div>
           ) : (
             <div className="p-4 rounded bg-slate-800 border border-slate-700 flex flex-col items-center text-center gap-3">
@@ -509,8 +506,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
               <div className="flex items-center gap-1.5 text-xs font-medium text-[#059669]">
                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                 <span>
-                  ✓ {value.captureSource === 'camera' ? 'Camera photo captured' : 'Image uploaded'}{' '}
-                  · EXIF Verified
+                  ✓ {value.captureSource === 'camera' ? 'Camera photo captured' : 'Image uploaded'}
                 </span>
               </div>
 

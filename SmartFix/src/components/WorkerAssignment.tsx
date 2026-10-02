@@ -6,9 +6,11 @@ interface WorkerAssignmentProps {
   workers: Worker[];
   currentWorker?: Worker;
   emailSent?: boolean;
+  emailError?: string | null;
   onAssign: (workerId: number) => Promise<{
     worker: Worker;
     email_sent: boolean;
+    email_error?: string | null;
   }>;
 }
 
@@ -16,6 +18,7 @@ export const WorkerAssignment: React.FC<WorkerAssignmentProps> = ({
   workers,
   currentWorker,
   emailSent,
+  emailError,
   onAssign,
 }) => {
   const [selectedId, setSelectedId] = useState<number>(
@@ -25,11 +28,13 @@ export const WorkerAssignment: React.FC<WorkerAssignmentProps> = ({
   const [feedback, setFeedback] = useState<{
     worker: Worker;
     emailSent: boolean;
+    emailError?: string | null;
   } | null>(
     currentWorker
       ? {
           worker: currentWorker,
-          emailSent: emailSent ?? true,
+          emailSent: emailSent ?? false,
+          emailError: emailError ?? null,
         }
       : null
   );
@@ -39,12 +44,13 @@ export const WorkerAssignment: React.FC<WorkerAssignmentProps> = ({
       setSelectedId(currentWorker.id);
       setFeedback({
         worker: currentWorker,
-        emailSent: emailSent ?? true,
+        emailSent: emailSent ?? false,
+        emailError: emailError ?? null,
       });
     } else if (workers.length > 0 && !selectedId) {
       setSelectedId(workers[0].id);
     }
-  }, [currentWorker, emailSent, workers]);
+  }, [currentWorker, emailSent, emailError, workers]);
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +61,8 @@ export const WorkerAssignment: React.FC<WorkerAssignmentProps> = ({
       const res = await onAssign(selectedId);
       setFeedback({
         worker: res.worker,
-        emailSent: res.email_sent,
+        emailSent: res.email_sent ?? false,
+        emailError: res.email_error ?? null,
       });
     } finally {
       setIsSubmitting(false);
@@ -133,9 +140,16 @@ export const WorkerAssignment: React.FC<WorkerAssignmentProps> = ({
                 </span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 text-xs text-[#B45309] font-medium">
-                <AlertTriangle className="w-3.5 h-3.5 text-[#D97706] shrink-0" />
-                <span>⚠ Assignment saved. Email notification could not be sent.</span>
+              <div className="flex flex-col gap-1 p-2.5 rounded bg-[#FFFBEB] border border-[#FDE68A] text-xs text-[#B45309]">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <AlertTriangle className="w-3.5 h-3.5 text-[#D97706] shrink-0" />
+                  <span>⚠ Worker assigned, but email notification failed.</span>
+                </div>
+                {feedback.emailError && (
+                  <span className="font-mono-tech text-[11px] text-[#92400E] pl-5">
+                    Reason: {feedback.emailError}
+                  </span>
+                )}
               </div>
             )}
           </div>

@@ -95,10 +95,15 @@ export const ComplaintDetails: React.FC = () => {
       });
       setSelectedStatus(res.status);
     }
-    triggerToast(`Worker assigned: ${res.worker.name}`);
+    triggerToast(
+      res.email_sent
+        ? `Worker assigned: ${res.worker.name} (Email sent)`
+        : `Worker assigned: ${res.worker.name} (Email failed)`
+    );
     return {
       worker: res.worker,
       email_sent: res.email_sent,
+      email_error: res.email_error,
     };
   };
 
@@ -354,15 +359,23 @@ export const ComplaintDetails: React.FC = () => {
                     src={getUploadUrl(complaint.photo_url)}
                     alt={`Maintenance issue evidence for ${complaint.complaint_id}`}
                     referrerPolicy="no-referrer"
-                    onError={() => setImgFallback(true)}
+                    onError={() => {
+                      console.warn('Evidence image failed to load from:', getUploadUrl(complaint.photo_url));
+                      setImgFallback(true);
+                    }}
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-white/80 p-6">
+                  <div className="w-full h-full flex flex-col items-center justify-center text-white/80 p-6 text-center">
                     <ImageIcon className="w-10 h-10 mb-2 text-[#60A5FA]" />
-                    <span className="text-xs font-mono-tech">
-                      Photographic Evidence ({complaint.complaint_id})
+                    <span className="text-xs font-mono-tech text-slate-200">
+                      Evidence image unavailable ({complaint.complaint_id})
                     </span>
+                    {complaint.photo_url && (
+                      <span className="text-[10px] font-mono-tech text-slate-400 mt-1 max-w-md truncate">
+                        URL: {getUploadUrl(complaint.photo_url)}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

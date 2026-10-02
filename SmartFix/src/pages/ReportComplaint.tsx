@@ -119,20 +119,22 @@ export const ReportComplaint: React.FC = () => {
           }
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
+          console.warn('GPS location detection failed:', err);
           setLocationPreview({
-            has_gps: photo.gpsAvailable !== false && !!photo.latitude,
-            gps_available: photo.gpsAvailable !== false && !!photo.latitude,
-            latitude: photo.latitude || selectedLocation?.latitude || 19.045266,
-            longitude: photo.longitude || selectedLocation?.longitude || 72.841845,
-            altitude_m: photo.altitude_m || 12.4,
-            distance_m: 0.0,
-            allowed_radius_m: 5,
+            has_gps: false,
+            gps_available: false,
+            latitude: null,
+            longitude: null,
+            altitude_m: null,
+            distance_m: null,
+            allowed_radius_m: selectedLocation?.radius_m || 5,
             detected_building: selectedLocation?.building || 'Xavier Institute of Engineering',
             detected_floor: selectedLocation ? `Floor ${selectedLocation.floor}` : 'Floor 1',
-            detected_room: selectedLocation?.room || 'DB Lab',
-            verified: true,
+            detected_room: selectedLocation?.room || 'Selected Location',
+            user_selected: selectedLocation?.location_name || 'Selected Campus Location',
+            verified: false,
           });
         }
       });

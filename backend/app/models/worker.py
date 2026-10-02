@@ -15,6 +15,27 @@ class Worker(db.Model):
 
     complaints = db.relationship('Complaint', back_populates='assigned_worker', lazy='dynamic')
 
+    def __init__(
+        self,
+        name: str,
+        email: str,
+        specialization: str,
+        phone: str | None = None,
+        license: str | None = None,
+        duty_id: str | None = None,
+        id: int | None = None,
+        created_at: datetime | None = None
+    ):
+        if id is not None:
+            self.id = id
+        self.name = name
+        self.email = email
+        self.specialization = specialization
+        self.phone = phone
+        self.license = license
+        self.duty_id = duty_id
+        self.created_at = created_at or datetime.utcnow()
+
     def to_dict(self):
         # Calculate active jobs count dynamically
         try:

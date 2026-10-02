@@ -284,7 +284,7 @@ def test_image_upload(client):
     body = res.get_json()
     assert body['success'] is True
     assert 'photo_url' in body['data']
-    assert body['data']['photo_url'].startswith('http://localhost:5000/uploads/')
+    assert '/uploads/' in body['data']['photo_url']
 
 def test_uploaded_image_served(client, app):
     # Create test image in uploads folder
@@ -326,7 +326,35 @@ def test_tracking_returns_photo_url(client):
     assert track_res.status_code == 200
     track_data = track_res.get_json()
     assert 'photo_url' in track_data
-    assert track_data['photo_url'].startswith('http://localhost:5000/uploads/')
+    assert '/uploads/' in track_data['photo_url']
+
+def test_missing_smtp_credentials_returns_failure(app):
+    with app.app_context():
+        with patch('app.config.Config.SMTP_USERNAME', ''):
+            with patch('app.config.Config.SMTP_PASSWORD', ''):
+                user = User(user_identifier='30', name='Soham', email='soham@example.com')
+                complaint = Complaint(
+                    complaint_id='COM-2026-0001',
+                    user_id=1,
+                    category='Electrical',
+                    description='Wire spark',
+                    location_id='LOC001',
+                    priority='Critical',
+                    status='Reported'
+                )
+                success, err = send_complaint_confirmation_email(complaint, user)
+                assert success is False
+                assert 'SMTP credentials are not configured' in err
+
+def test_extract_gps_from_real_sample_images():
+    sample_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'SmartFix', 'src', 'assets', 'images'))
+    elec_path = os.path.join(sample_dir, 'incident_electrical_spark_1790921884186.jpg')
+    if os.path.exists(elec_path):
+        res = extract_gps_from_image(elec_path)
+        assert res['gps_available'] is True
+        assert round(res['latitude'], 4) == 19.0453
+        assert round(res['longitude'], 4) == 72.8418
+        assert res['altitude_m'] == 12.4
 
 # ============================================================
 # 4. PRIORITY & RECURRENCE TESTS

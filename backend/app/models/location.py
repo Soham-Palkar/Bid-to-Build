@@ -15,6 +15,29 @@ class Location(db.Model):
 
     complaints = db.relationship('Complaint', back_populates='location', foreign_keys='Complaint.location_id', lazy='dynamic')
 
+    def __init__(
+        self,
+        location_id: str,
+        building: str,
+        floor: int,
+        room: str,
+        location_name: str,
+        latitude: float,
+        longitude: float,
+        radius_m: float = 5.0,
+        id: int | None = None
+    ):
+        if id is not None:
+            self.id = id
+        self.location_id = location_id
+        self.building = building
+        self.floor = floor
+        self.room = room
+        self.location_name = location_name
+        self.latitude = latitude
+        self.longitude = longitude
+        self.radius_m = radius_m
+
     def to_dict(self):
         return {
             'id': self.id,
